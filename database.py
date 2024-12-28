@@ -19,9 +19,14 @@ def drop_all_tables():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    cur.execute("""
-        DROP TABLE IF EXISTS players CASCADE;
-    """)
+    tables = [
+        'qb_stats', 'rb_stats', 'wr_stats', 'te_stats',
+        'k_stats', 'lb_stats', 'dl_stats', 'db_stats'
+    ]
+    
+    for table in tables:
+        cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        print(f"Dropped table {table}")
     
     conn.commit()
     cur.close()
@@ -30,48 +35,68 @@ def drop_all_tables():
 
 def create_tables():
     print("Creating tables...")
-    commands = (
-        """
-        CREATE TABLE IF NOT EXISTS players (
-            id SERIAL PRIMARY KEY,
-            position VARCHAR(5),
-            player_name VARCHAR(100),
-            team VARCHAR(50),
-            season_data JSONB
-        )
-        """,
-    )
-    
     conn = get_db_connection()
     cur = conn.cursor()
     
-    for command in commands:
-        cur.execute(command)
-        print("Table creation SQL executed successfully")
+    # Create QB stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS qb_stats (
+            playername character varying(100),
+            playerid bigint PRIMARY KEY,
+            pos character varying(5),
+            team character varying(5),
+            attempts bigint,
+            completions bigint,
+            completionpct numeric,
+            passingyards bigint,
+            passingtds bigint,
+            interceptions bigint,
+            rating numeric,
+            rushingyards bigint,
+            rushingtds bigint,
+            rank bigint,
+            totalpoints numeric
+        )
+    """)
+    print("Created QB stats table")
+    
+    # Create similar tables for other positions...
+    # Add more CREATE TABLE statements for other positions
     
     cur.close()
     conn.commit()
     conn.close()
-    print("Tables created successfully!")
+    print("All tables created successfully!")
 
 def load_json_data(position, filename):
     print(f"\nLoading {position} data from {filename}...")
     conn = get_db_connection()
     cur = conn.cursor()
     
+    table_name = f"{position.lower()}_stats"
+    
     try:
         with open(filename, 'r') as file:
             data = json.load(file)
             print(f"Found {len(data)} {position} players to load")
-            for player_data in data:
-                cur.execute(
-                    """
-                    INSERT INTO players (position, player_name, team, season_data)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    (position, player_data.get('name'), player_data.get('team'), json.dumps(player_data))
-                )
-                print(f"Loaded player: {player_data.get('name')}")
+            
+            # Get column names from the first record
+            if data:
+                columns = list(data[0].keys())
+                columns_str = ', '.join(columns)
+                values_str = ', '.join(['%s'] * len(columns))
+                
+                # Create INSERT statement
+                insert_query = f"""
+                    INSERT INTO {table_name} ({columns_str})
+                    VALUES ({values_str})
+                """
+                
+                # Insert each player's data
+                for player_data in data:
+                    values = [player_data.get(col) for col in columns]
+                    cur.execute(insert_query, values)
+                    print(f"Loaded player: {player_data.get('playername')}")
         
         conn.commit()
         print(f"Successfully loaded all {position} players!")
