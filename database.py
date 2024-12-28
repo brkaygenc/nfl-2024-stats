@@ -16,11 +16,22 @@ def get_db_connection():
 
 def load_json_data(position, filename):
     print(f"\nLoading {position} data from {filename}...")
+    # Get the absolute path of the script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(script_dir, filename)
+    print(f"Looking for file at: {file_path}")
+    
     conn = get_db_connection()
     cur = conn.cursor()
     
     try:
-        with open(filename, 'r') as file:
+        if not os.path.exists(file_path):
+            print(f"Error: File not found at {file_path}")
+            print(f"Current working directory: {os.getcwd()}")
+            print(f"Directory contents: {os.listdir(os.getcwd())}")
+            return
+            
+        with open(file_path, 'r') as file:
             data = json.load(file)
             print(f"Found {len(data)} {position} players to load")
             
@@ -108,6 +119,8 @@ def load_json_data(position, filename):
         print(f"Successfully loaded all {position} players!")
     except Exception as e:
         print(f"Error loading {position} data: {str(e)}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Directory contents: {os.listdir(os.getcwd())}")
         conn.rollback()
     finally:
         cur.close()
@@ -115,6 +128,8 @@ def load_json_data(position, filename):
 
 if __name__ == "__main__":
     print("Starting data loading...")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Directory contents: {os.listdir(os.getcwd())}")
     
     # Load data for each position
     position_files = {
@@ -133,6 +148,4 @@ if __name__ == "__main__":
             print(f"\nProcessing {position} data from {filename}")
             load_json_data(position, filename)
         else:
-            print(f"Warning: File {filename} not found")
-    
-    print("\nData loading complete!") 
+            print(f"Warning: File {filename} not found in {os.getcwd()}") 
