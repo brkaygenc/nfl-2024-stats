@@ -9,16 +9,16 @@ def get_db_connection():
     DATABASE_URL = os.getenv('DATABASE_URL')
     if DATABASE_URL is None:
         raise ValueError("No DATABASE_URL environment variable set")
-    
-    # Add SSL mode for Heroku
+    print(f"Connecting to database...")
     conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    print("Database connection successful!")
     return conn
 
 def drop_all_tables():
+    print("Dropping existing tables...")
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # Drop the players table if it exists
     cur.execute("""
         DROP TABLE IF EXISTS players CASCADE;
     """)
@@ -29,6 +29,7 @@ def drop_all_tables():
     print("All tables dropped successfully")
 
 def create_tables():
+    print("Creating tables...")
     commands = (
         """
         CREATE TABLE IF NOT EXISTS players (
@@ -46,31 +47,44 @@ def create_tables():
     
     for command in commands:
         cur.execute(command)
+        print("Table creation SQL executed successfully")
     
     cur.close()
     conn.commit()
     conn.close()
+    print("Tables created successfully!")
 
 def load_json_data(position, filename):
+    print(f"\nLoading {position} data from {filename}...")
     conn = get_db_connection()
     cur = conn.cursor()
     
-    with open(filename, 'r') as file:
-        data = json.load(file)
-        for player_data in data:
-            cur.execute(
-                """
-                INSERT INTO players (position, player_name, team, season_data)
-                VALUES (%s, %s, %s, %s)
-                """,
-                (position, player_data.get('name'), player_data.get('team'), json.dumps(player_data))
-            )
-    
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        with open(filename, 'r') as file:
+            data = json.load(file)
+            print(f"Found {len(data)} {position} players to load")
+            for player_data in data:
+                cur.execute(
+                    """
+                    INSERT INTO players (position, player_name, team, season_data)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (position, player_data.get('name'), player_data.get('team'), json.dumps(player_data))
+                )
+                print(f"Loaded player: {player_data.get('name')}")
+        
+        conn.commit()
+        print(f"Successfully loaded all {position} players!")
+    except Exception as e:
+        print(f"Error loading {position} data: {str(e)}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
 
 if __name__ == "__main__":
+    print("Starting database initialization...")
+    
     # First drop all existing tables
     drop_all_tables()
     
@@ -89,7 +103,12 @@ if __name__ == "__main__":
         'DB': 'DB_season.json'
     }
     
+    print("\nStarting data loading...")
     for position, filename in position_files.items():
         if os.path.exists(filename):
-            print(f"Loading {position} data from {filename}")
-            load_json_data(position, filename) 
+            print(f"\nProcessing {position} data from {filename}")
+            load_json_data(position, filename)
+        else:
+            print(f"Warning: File {filename} not found")
+    
+    print("\nDatabase initialization complete!") 
