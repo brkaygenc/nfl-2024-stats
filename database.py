@@ -10,160 +10,161 @@ def get_db_connection():
     if DATABASE_URL is None:
         raise ValueError("No DATABASE_URL environment variable set")
     print(f"Connecting to database...")
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-    print("Database connection successful!")
-    return conn
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+        print("Database connection successful!")
+        return conn
+    except Exception as e:
+        print(f"Error connecting to database: {str(e)}")
+        raise
 
 def create_tables():
     print("Creating tables...")
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # Create QB stats table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS qb_stats (
-            playername VARCHAR(100),
-            playerid VARCHAR(20) PRIMARY KEY,
-            team VARCHAR(5),
-            passingyards INTEGER,
-            passingtds INTEGER,
-            interceptions INTEGER,
-            rushingyards INTEGER,
-            rushingtds INTEGER,
-            totalpoints NUMERIC,
-            rank INTEGER
-        )
-    """)
-    print("Created QB stats table")
-
-    # Create RB stats table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS rb_stats (
-            playername VARCHAR(100),
-            playerid VARCHAR(20) PRIMARY KEY,
-            team VARCHAR(5),
-            rushingyards INTEGER,
-            rushingtds INTEGER,
-            receptions INTEGER,
-            receivingyards INTEGER,
-            receivingtds INTEGER,
-            totalpoints NUMERIC,
-            rank INTEGER
-        )
-    """)
-    print("Created RB stats table")
-
-    # Create WR stats table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS wr_stats (
-            playername VARCHAR(100),
-            playerid VARCHAR(20) PRIMARY KEY,
-            team VARCHAR(5),
-            receptions INTEGER,
-            targets INTEGER,
-            receivingyards INTEGER,
-            receivingtds INTEGER,
-            totalpoints NUMERIC,
-            rank INTEGER
-        )
-    """)
-    print("Created WR stats table")
-
-    # Create TE stats table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS te_stats (
-            playername VARCHAR(100),
-            playerid VARCHAR(20) PRIMARY KEY,
-            team VARCHAR(5),
-            receptions INTEGER,
-            targets INTEGER,
-            receivingyards INTEGER,
-            receivingtds INTEGER,
-            totalpoints NUMERIC,
-            rank INTEGER
-        )
-    """)
-    print("Created TE stats table")
-
-    # Create K stats table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS k_stats (
-            playername VARCHAR(100),
-            playerid VARCHAR(20) PRIMARY KEY,
-            team VARCHAR(5),
-            fieldgoals INTEGER,
-            fieldgoalattempts INTEGER,
-            extrapoints INTEGER,
-            extrapointattempts INTEGER,
-            totalpoints NUMERIC,
-            rank INTEGER
-        )
-    """)
-    print("Created K stats table")
-
-    # Create defensive player tables (LB, DL, DB)
-    defensive_tables = ['lb_stats', 'dl_stats', 'db_stats']
-    for table in defensive_tables:
-        cur.execute(f"""
-            CREATE TABLE IF NOT EXISTS {table} (
+    try:
+        # Create QB stats table
+        cur.execute("""
+            DROP TABLE IF EXISTS qb_stats CASCADE;
+            CREATE TABLE qb_stats (
                 playername VARCHAR(100),
                 playerid VARCHAR(20) PRIMARY KEY,
                 team VARCHAR(5),
-                tackles INTEGER,
-                sacks NUMERIC,
+                passingyards INTEGER,
+                passingtds INTEGER,
                 interceptions INTEGER,
+                rushingyards INTEGER,
+                rushingtds INTEGER,
                 totalpoints NUMERIC,
                 rank INTEGER
             )
         """)
-        print(f"Created {table.upper()} table")
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("All tables created successfully!")
+        print("Created QB stats table")
 
-def drop_all_tables():
-    print("Dropping existing tables...")
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    tables = [
-        'qb_stats', 'rb_stats', 'wr_stats', 'te_stats',
-        'k_stats', 'lb_stats', 'dl_stats', 'db_stats'
-    ]
-    
-    for table in tables:
-        cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
-        print(f"Dropped table {table}")
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("All tables dropped successfully")
+        # Create RB stats table
+        cur.execute("""
+            DROP TABLE IF EXISTS rb_stats CASCADE;
+            CREATE TABLE rb_stats (
+                playername VARCHAR(100),
+                playerid VARCHAR(20) PRIMARY KEY,
+                team VARCHAR(5),
+                rushingyards INTEGER,
+                rushingtds INTEGER,
+                receptions INTEGER,
+                receivingyards INTEGER,
+                receivingtds INTEGER,
+                totalpoints NUMERIC,
+                rank INTEGER
+            )
+        """)
+        print("Created RB stats table")
+
+        # Create WR stats table
+        cur.execute("""
+            DROP TABLE IF EXISTS wr_stats CASCADE;
+            CREATE TABLE wr_stats (
+                playername VARCHAR(100),
+                playerid VARCHAR(20) PRIMARY KEY,
+                team VARCHAR(5),
+                receptions INTEGER,
+                targets INTEGER,
+                receivingyards INTEGER,
+                receivingtds INTEGER,
+                totalpoints NUMERIC,
+                rank INTEGER
+            )
+        """)
+        print("Created WR stats table")
+
+        # Create TE stats table
+        cur.execute("""
+            DROP TABLE IF EXISTS te_stats CASCADE;
+            CREATE TABLE te_stats (
+                playername VARCHAR(100),
+                playerid VARCHAR(20) PRIMARY KEY,
+                team VARCHAR(5),
+                receptions INTEGER,
+                targets INTEGER,
+                receivingyards INTEGER,
+                receivingtds INTEGER,
+                totalpoints NUMERIC,
+                rank INTEGER
+            )
+        """)
+        print("Created TE stats table")
+
+        # Create K stats table
+        cur.execute("""
+            DROP TABLE IF EXISTS k_stats CASCADE;
+            CREATE TABLE k_stats (
+                playername VARCHAR(100),
+                playerid VARCHAR(20) PRIMARY KEY,
+                team VARCHAR(5),
+                fieldgoals INTEGER,
+                fieldgoalattempts INTEGER,
+                extrapoints INTEGER,
+                extrapointattempts INTEGER,
+                totalpoints NUMERIC,
+                rank INTEGER
+            )
+        """)
+        print("Created K stats table")
+
+        # Create defensive player tables (LB, DL, DB)
+        defensive_tables = ['lb_stats', 'dl_stats', 'db_stats']
+        for table in defensive_tables:
+            cur.execute(f"""
+                DROP TABLE IF EXISTS {table} CASCADE;
+                CREATE TABLE {table} (
+                    playername VARCHAR(100),
+                    playerid VARCHAR(20) PRIMARY KEY,
+                    team VARCHAR(5),
+                    tackles INTEGER,
+                    sacks NUMERIC,
+                    interceptions INTEGER,
+                    totalpoints NUMERIC,
+                    rank INTEGER
+                )
+            """)
+            print(f"Created {table.upper()} table")
+        
+        conn.commit()
+        print("All tables created successfully!")
+    except Exception as e:
+        print(f"Error creating tables: {str(e)}")
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
 
 def load_json_data(position, filename):
     print(f"\nLoading {position} data from {filename}...")
-    # Get the absolute path of the script
     script_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(script_dir, filename)
     print(f"Looking for file at: {file_path}")
+    
+    if not os.path.exists(file_path):
+        print(f"Error: File not found at {file_path}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Directory contents: {os.listdir(os.getcwd())}")
+        return
+    
+    try:
+        with open(file_path, 'r') as file:
+            data = json.load(file)
+            print(f"Successfully loaded JSON data with {len(data)} {position} players")
+    except Exception as e:
+        print(f"Error reading JSON file: {str(e)}")
+        return
     
     conn = get_db_connection()
     cur = conn.cursor()
     
     try:
-        if not os.path.exists(file_path):
-            print(f"Error: File not found at {file_path}")
-            print(f"Current working directory: {os.getcwd()}")
-            print(f"Directory contents: {os.listdir(os.getcwd())}")
-            return
-            
-        with open(file_path, 'r') as file:
-            data = json.load(file)
-            print(f"Found {len(data)} {position} players to load")
-            
-            for player in data:
+        for player in data:
+            try:
                 if position == 'QB':
                     cur.execute("""
                         INSERT INTO qb_stats (playername, playerid, team, 
@@ -242,13 +243,15 @@ def load_json_data(position, filename):
                         int(player['Rank']) if player['Rank'] else 0
                     ))
                 print(f"Loaded player: {player['PlayerName']}")
+            except Exception as e:
+                print(f"Error loading player {player.get('PlayerName', 'Unknown')}: {str(e)}")
+                conn.rollback()
+                continue
         
         conn.commit()
         print(f"Successfully loaded all {position} players!")
     except Exception as e:
-        print(f"Error loading {position} data: {str(e)}")
-        print(f"Current working directory: {os.getcwd()}")
-        print(f"Directory contents: {os.listdir(os.getcwd())}")
+        print(f"Error in database operations: {str(e)}")
         conn.rollback()
     finally:
         cur.close()
@@ -256,28 +259,32 @@ def load_json_data(position, filename):
 
 if __name__ == "__main__":
     print("Starting database initialization...")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Directory contents: {os.listdir(os.getcwd())}")
     
-    # First drop all existing tables
-    drop_all_tables()
-    
-    # Create tables
-    create_tables()
-    
-    # Load data for each position
-    position_files = {
-        'QB': 'QB_season.json',
-        'RB': 'RB_season.json',
-        'WR': 'WR_season.json',
-        'TE': 'TE_season.json',
-        'K': 'K_season.json',
-        'LB': 'LB_season.json',
-        'DL': 'DL_season.json',
-        'DB': 'DB_season.json'
-    }
-    
-    for position, filename in position_files.items():
-        if os.path.exists(filename):
-            print(f"\nProcessing {position} data from {filename}")
-            load_json_data(position, filename)
-        else:
-            print(f"Warning: File {filename} not found in {os.getcwd()}") 
+    try:
+        # Create tables (this will also drop existing tables)
+        create_tables()
+        
+        # Load data for each position
+        position_files = {
+            'QB': 'QB_season.json',
+            'RB': 'RB_season.json',
+            'WR': 'WR_season.json',
+            'TE': 'TE_season.json',
+            'K': 'K_season.json',
+            'LB': 'LB_season.json',
+            'DL': 'DL_season.json',
+            'DB': 'DB_season.json'
+        }
+        
+        for position, filename in position_files.items():
+            if os.path.exists(filename):
+                print(f"\nProcessing {position} data from {filename}")
+                load_json_data(position, filename)
+            else:
+                print(f"Warning: File {filename} not found in {os.getcwd()}")
+        
+        print("\nDatabase initialization complete!")
+    except Exception as e:
+        print(f"Error in main process: {str(e)}") 
