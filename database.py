@@ -9,7 +9,24 @@ def get_db_connection():
     DATABASE_URL = os.getenv('DATABASE_URL')
     if DATABASE_URL is None:
         raise ValueError("No DATABASE_URL environment variable set")
-    return psycopg2.connect(DATABASE_URL)
+    
+    # Add SSL mode for Heroku
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    return conn
+
+def drop_all_tables():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Drop the players table if it exists
+    cur.execute("""
+        DROP TABLE IF EXISTS players CASCADE;
+    """)
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("All tables dropped successfully")
 
 def create_tables():
     commands = (
@@ -54,6 +71,9 @@ def load_json_data(position, filename):
     conn.close()
 
 if __name__ == "__main__":
+    # First drop all existing tables
+    drop_all_tables()
+    
     # Create tables
     create_tables()
     
