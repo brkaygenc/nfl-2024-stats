@@ -14,6 +14,134 @@ def get_db_connection():
     print("Database connection successful!")
     return conn
 
+def create_tables():
+    print("Creating tables...")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Create QB stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS qb_stats (
+            playername VARCHAR(100),
+            playerid VARCHAR(20) PRIMARY KEY,
+            team VARCHAR(5),
+            passingyards INTEGER,
+            passingtds INTEGER,
+            interceptions INTEGER,
+            rushingyards INTEGER,
+            rushingtds INTEGER,
+            totalpoints NUMERIC,
+            rank INTEGER
+        )
+    """)
+    print("Created QB stats table")
+
+    # Create RB stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rb_stats (
+            playername VARCHAR(100),
+            playerid VARCHAR(20) PRIMARY KEY,
+            team VARCHAR(5),
+            rushingyards INTEGER,
+            rushingtds INTEGER,
+            receptions INTEGER,
+            receivingyards INTEGER,
+            receivingtds INTEGER,
+            totalpoints NUMERIC,
+            rank INTEGER
+        )
+    """)
+    print("Created RB stats table")
+
+    # Create WR stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS wr_stats (
+            playername VARCHAR(100),
+            playerid VARCHAR(20) PRIMARY KEY,
+            team VARCHAR(5),
+            receptions INTEGER,
+            targets INTEGER,
+            receivingyards INTEGER,
+            receivingtds INTEGER,
+            totalpoints NUMERIC,
+            rank INTEGER
+        )
+    """)
+    print("Created WR stats table")
+
+    # Create TE stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS te_stats (
+            playername VARCHAR(100),
+            playerid VARCHAR(20) PRIMARY KEY,
+            team VARCHAR(5),
+            receptions INTEGER,
+            targets INTEGER,
+            receivingyards INTEGER,
+            receivingtds INTEGER,
+            totalpoints NUMERIC,
+            rank INTEGER
+        )
+    """)
+    print("Created TE stats table")
+
+    # Create K stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS k_stats (
+            playername VARCHAR(100),
+            playerid VARCHAR(20) PRIMARY KEY,
+            team VARCHAR(5),
+            fieldgoals INTEGER,
+            fieldgoalattempts INTEGER,
+            extrapoints INTEGER,
+            extrapointattempts INTEGER,
+            totalpoints NUMERIC,
+            rank INTEGER
+        )
+    """)
+    print("Created K stats table")
+
+    # Create defensive player tables (LB, DL, DB)
+    defensive_tables = ['lb_stats', 'dl_stats', 'db_stats']
+    for table in defensive_tables:
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table} (
+                playername VARCHAR(100),
+                playerid VARCHAR(20) PRIMARY KEY,
+                team VARCHAR(5),
+                tackles INTEGER,
+                sacks NUMERIC,
+                interceptions INTEGER,
+                totalpoints NUMERIC,
+                rank INTEGER
+            )
+        """)
+        print(f"Created {table.upper()} table")
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("All tables created successfully!")
+
+def drop_all_tables():
+    print("Dropping existing tables...")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    tables = [
+        'qb_stats', 'rb_stats', 'wr_stats', 'te_stats',
+        'k_stats', 'lb_stats', 'dl_stats', 'db_stats'
+    ]
+    
+    for table in tables:
+        cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        print(f"Dropped table {table}")
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("All tables dropped successfully")
+
 def load_json_data(position, filename):
     print(f"\nLoading {position} data from {filename}...")
     # Get the absolute path of the script
@@ -127,9 +255,13 @@ def load_json_data(position, filename):
         conn.close()
 
 if __name__ == "__main__":
-    print("Starting data loading...")
-    print(f"Current working directory: {os.getcwd()}")
-    print(f"Directory contents: {os.listdir(os.getcwd())}")
+    print("Starting database initialization...")
+    
+    # First drop all existing tables
+    drop_all_tables()
+    
+    # Create tables
+    create_tables()
     
     # Load data for each position
     position_files = {
