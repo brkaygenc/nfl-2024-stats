@@ -59,9 +59,94 @@ def create_tables():
         )
     """)
     print("Created QB stats table")
-    
-    # Create similar tables for other positions...
-    # Add more CREATE TABLE statements for other positions
+
+    # Create RB stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rb_stats (
+            playername character varying(100),
+            playerid bigint PRIMARY KEY,
+            pos character varying(5),
+            team character varying(5),
+            attempts bigint,
+            rushingyards bigint,
+            rushingtds bigint,
+            receptions bigint,
+            receivingyards bigint,
+            receivingtds bigint,
+            rank bigint,
+            totalpoints numeric
+        )
+    """)
+    print("Created RB stats table")
+
+    # Create WR stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS wr_stats (
+            playername character varying(100),
+            playerid bigint PRIMARY KEY,
+            pos character varying(5),
+            team character varying(5),
+            receptions bigint,
+            targets bigint,
+            receivingyards bigint,
+            receivingtds bigint,
+            rank bigint,
+            totalpoints numeric
+        )
+    """)
+    print("Created WR stats table")
+
+    # Create TE stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS te_stats (
+            playername character varying(100),
+            playerid bigint PRIMARY KEY,
+            pos character varying(5),
+            team character varying(5),
+            receptions bigint,
+            targets bigint,
+            receivingyards bigint,
+            receivingtds bigint,
+            rank bigint,
+            totalpoints numeric
+        )
+    """)
+    print("Created TE stats table")
+
+    # Create K stats table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS k_stats (
+            playername character varying(100),
+            playerid bigint PRIMARY KEY,
+            pos character varying(5),
+            team character varying(5),
+            fieldgoals bigint,
+            fieldgoalattempts bigint,
+            extrapoints bigint,
+            extrapointattempts bigint,
+            rank bigint,
+            totalpoints numeric
+        )
+    """)
+    print("Created K stats table")
+
+    # Create defensive player tables (LB, DL, DB)
+    defensive_tables = ['lb_stats', 'dl_stats', 'db_stats']
+    for table in defensive_tables:
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table} (
+                playername character varying(100),
+                playerid bigint PRIMARY KEY,
+                pos character varying(5),
+                team character varying(5),
+                tackles bigint,
+                sacks numeric,
+                interceptions bigint,
+                rank bigint,
+                totalpoints numeric
+            )
+        """)
+        print(f"Created {table.upper()} table")
     
     cur.close()
     conn.commit()
