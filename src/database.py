@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def connect_to_db():
+def get_db_connection():
     try:
         print("Connecting to database...")
         # Get database URL from environment variable, default to local database if not set
@@ -511,7 +511,7 @@ def load_teams_data():
         print(f"Error reading teams JSON file: {str(e)}")
         return
     
-    conn = connect_to_db()
+    conn = get_db_connection()
     cur = conn.cursor()
     
     try:
@@ -543,7 +543,7 @@ def load_teams_data():
 def main():
     try:
         # Create a single database connection for the entire process
-        conn = connect_to_db()
+        conn = get_db_connection()
         create_tables(conn)
         load_json_data(conn)  # Pass the connection to load_json_data
     except Exception as e:
