@@ -3,11 +3,19 @@ import pandas as pd
 import psycopg2
 import os
 
-# Get the DATABASE_URL from environment variable
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# Database configuration
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
 
 # Create a connection to the database
-conn = psycopg2.connect(DATABASE_URL)
+try:
+    # If using local database, don't require SSL
+    if 'localhost' in DATABASE_URL:
+        conn = psycopg2.connect(DATABASE_URL)
+    else:
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+except psycopg2.Error as e:
+    st.error(f"Failed to connect to database: {str(e)}")
+    st.stop()
 
 # Set page config
 st.set_page_config(
@@ -45,7 +53,21 @@ position = st.sidebar.selectbox(
 table_name = f"{position.lower()}_stats"
 
 # Query to get all data for the selected position
-query = f"SELECT * FROM {table_name}"
+if position in ["LB", "DL", "DB"]:
+    query = f"""
+        SELECT 
+            playername,
+            team,
+            COALESCE(tackles, 0) as tackles,
+            COALESCE(sacks, 0) as sacks,
+            COALESCE(interceptions, 0) as interceptions,
+            COALESCE(totalpoints, 0) as totalpoints,
+            rank
+        FROM {table_name}
+        ORDER BY totalpoints DESC
+    """
+else:
+    query = f"SELECT * FROM {table_name}"
 
 try:
     # Read data into a pandas DataFrame

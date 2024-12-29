@@ -5,22 +5,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_db_connection():
-    DATABASE_URL = os.getenv('DATABASE_URL')
-    if DATABASE_URL is None:
-        raise ValueError("No DATABASE_URL environment variable set")
-    print(f"Connecting to database...")
+def connect_to_db():
     try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-        print("Database connection successful!")
+        print("Connecting to database...")
+        # Get database URL from environment variable, default to local database if not set
+        database_url = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
+        
+        # If using local database, don't require SSL
+        if 'localhost' in database_url:
+            conn = psycopg2.connect(database_url)
+        else:
+            conn = psycopg2.connect(database_url, sslmode='require')
+        
         return conn
     except Exception as e:
-        print(f"Error connecting to database: {str(e)}")
-        raise
+        print(f"Error connecting to database: {e}")
+        raise e
 
 def create_tables():
     print("Creating tables...")
-    conn = get_db_connection()
+    conn = connect_to_db()
     cur = conn.cursor()
     
     try:
@@ -159,7 +163,7 @@ def load_json_data(position, filename):
         print(f"Error reading JSON file: {str(e)}")
         return
     
-    conn = get_db_connection()
+    conn = connect_to_db()
     cur = conn.cursor()
     
     try:
@@ -246,14 +250,13 @@ def load_json_data(position, filename):
                     ))
                 elif position in ['LB', 'DL', 'DB']:
                     # Get defensive stats from the correct fields
-                    tackles = int(player['DefTackles']) if player.get('DefTackles') else 0
-                    sacks = float(player['DefSacks']) if player.get('DefSacks') else 0
-                    interceptions = int(player['DefInt']) if player.get('DefInt') else 0
+                    tackles = int(player.get('TacklesTot', 0) or 0)
+                    sacks = float(player.get('TacklesSck', 0) or 0)
+                    interceptions = int(player.get('TurnoverInt', 0) or 0)
                     
                     cur.execute(f"""
                         INSERT INTO {position.lower()}_stats (playername, playerid, team,
-                            tackles, sacks, interceptions,
-                            totalpoints, rank)
+                            tackles, sacks, interceptions, totalpoints, rank)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         player['PlayerName'], player['PlayerId'], player['Team'],
