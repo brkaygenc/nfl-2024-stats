@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from sqlalchemy import create_engine
+import re
 
 # Database configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
@@ -29,74 +30,137 @@ st.set_page_config(
 st.title("NFL Stats 2024 🏈")
 
 # Sidebar for filtering
-st.sidebar.header("Filters")
+st.sidebar.header("Navigation")
 
-# Position groups
-position_groups = {
-    "Offense": ["QB", "RB", "WR", "TE"],
-    "Defense": ["LB", "DL", "DB"],
-    "Special Teams": ["K"]
-}
+# Add radio button for switching between normal view and SQL query
+view_mode = st.sidebar.radio("Select Mode", ["Stats View", "SQL Query"])
 
-# Position group selection
-position_group = st.sidebar.selectbox(
-    "Select Position Group",
-    list(position_groups.keys())
-)
+if view_mode == "Stats View":
+    # Original stats view code
+    st.sidebar.header("Filters")
 
-# Position selection based on group
-position = st.sidebar.selectbox(
-    "Select Position",
-    position_groups[position_group]
-)
+    # Position groups
+    position_groups = {
+        "Offense": ["QB", "RB", "WR", "TE"],
+        "Defense": ["LB", "DL", "DB"],
+        "Special Teams": ["K"]
+    }
 
-# Get table name based on position
-table_name = f"{position.lower()}_stats"
+    # Position group selection
+    position_group = st.sidebar.selectbox(
+        "Select Position Group",
+        list(position_groups.keys())
+    )
 
-# Query to get all data for the selected position
-if position in ["LB", "DL", "DB"]:
-    query = f"""
-        SELECT 
-            playername,
-            playerid,
-            team,
-            COALESCE(tackles, 0) as tackles,
-            COALESCE(sacks, 0) as sacks,
-            COALESCE(interceptions, 0) as interceptions,
-            COALESCE(totalpoints, 0) as totalpoints,
-            rank
-        FROM {table_name}
-        ORDER BY totalpoints DESC
-    """
+    # Position selection based on group
+    position = st.sidebar.selectbox(
+        "Select Position",
+        position_groups[position_group]
+    )
+
+    # Get table name based on position
+    table_name = f"{position.lower()}_stats"
+
+    # Query to get all data for the selected position
+    if position in ["LB", "DL", "DB"]:
+        query = f"""
+            SELECT 
+                playername,
+                playerid,
+                team,
+                COALESCE(tackles, 0) as tackles,
+                COALESCE(sacks, 0) as sacks,
+                COALESCE(interceptions, 0) as interceptions,
+                COALESCE(totalpoints, 0) as totalpoints,
+                rank
+            FROM {table_name}
+            ORDER BY totalpoints DESC
+        """
+    else:
+        query = f"SELECT * FROM {table_name}"
+
+    try:
+        # Read data into a pandas DataFrame using SQLAlchemy engine
+        df = pd.read_sql_query(query, engine)
+        
+        # Display the data
+        st.dataframe(df)
+        
+        # Basic stats
+        st.subheader("Summary Statistics")
+        st.write(df.describe())
+        
+        # Additional position-specific stats
+        if position in ["QB", "RB", "WR", "TE"]:
+            st.subheader(f"Top 10 {position}s by Total Points")
+            top_10 = df.nlargest(10, 'totalpoints')[['playername', 'playerid', 'team', 'totalpoints']]
+            st.dataframe(top_10)
+        elif position in ["LB", "DL", "DB"]:
+            st.subheader(f"Top 10 {position}s by Tackles")
+            top_10 = df.nlargest(10, 'tackles')[['playername', 'playerid', 'team', 'tackles', 'sacks', 'interceptions']]
+            st.dataframe(top_10)
+        elif position == "K":
+            st.subheader("Kicker Rankings")
+            kicker_stats = df[['playername', 'playerid', 'team', 'totalpoints']]
+            st.dataframe(kicker_stats)
+        
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+
 else:
-    query = f"SELECT * FROM {table_name}"
+    # SQL Query view
+    st.sidebar.header("Available Tables")
+    st.sidebar.markdown("""
+    - qb_stats
+    - rb_stats
+    - wr_stats
+    - te_stats
+    - lb_stats
+    - dl_stats
+    - db_stats
+    - k_stats
+    """)
 
-try:
-    # Read data into a pandas DataFrame using SQLAlchemy engine
-    df = pd.read_sql_query(query, engine)
+    # Example queries
+    st.sidebar.header("Example Queries")
+    st.sidebar.markdown("""
+    ```sql
+    SELECT * FROM qb_stats WHERE totalpoints > 200
+    ```
+    ```sql
+    SELECT playername, team, tackles FROM lb_stats ORDER BY tackles DESC LIMIT 5
+    ```
+    """)
+
+    # Main query input area
+    st.subheader("Custom SQL Query")
+    query = st.text_area("Enter your SQL query:", height=150)
     
-    # Display the data
-    st.dataframe(df)
-    
-    # Basic stats
-    st.subheader("Summary Statistics")
-    st.write(df.describe())
-    
-    # Additional position-specific stats
-    if position in ["QB", "RB", "WR", "TE"]:
-        st.subheader(f"Top 10 {position}s by Total Points")
-        top_10 = df.nlargest(10, 'totalpoints')[['playername', 'playerid', 'team', 'totalpoints']]
-        st.dataframe(top_10)
-    elif position in ["LB", "DL", "DB"]:
-        st.subheader(f"Top 10 {position}s by Tackles")
-        top_10 = df.nlargest(10, 'tackles')[['playername', 'playerid', 'team', 'tackles', 'sacks', 'interceptions']]
-        st.dataframe(top_10)
-    elif position == "K":
-        st.subheader("Kicker Rankings")
-        kicker_stats = df[['playername', 'playerid', 'team', 'totalpoints']]
-        st.dataframe(kicker_stats)
-    
-except Exception as e:
-    st.error(f"Error loading data: {str(e)}")
+    # Execute button
+    if st.button("Execute Query"):
+        if query:
+            # Basic SQL injection prevention
+            if re.search(r'\b(DELETE|INSERT|UPDATE|DROP|CREATE|ALTER)\b', query, re.IGNORECASE):
+                st.error("Only SELECT queries are allowed!")
+            elif not query.strip().upper().startswith('SELECT'):
+                st.error("Only SELECT queries are allowed!")
+            else:
+                try:
+                    df = pd.read_sql_query(query, engine)
+                    st.success("Query executed successfully!")
+                    st.dataframe(df)
+                    
+                    # Show row count
+                    st.info(f"Number of rows returned: {len(df)}")
+                    
+                    # Show basic stats for numeric columns
+                    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+                    if not numeric_cols.empty:
+                        st.subheader("Summary Statistics for Numeric Columns")
+                        st.write(df[numeric_cols].describe())
+                except Exception as e:
+                    st.error(f"Error executing query: {str(e)}")
+        else:
+            st.warning("Please enter a SQL query.")
 
 # Remove the port configuration as it's handled by setup.sh 
