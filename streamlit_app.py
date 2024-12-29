@@ -49,4 +49,7 @@ except Exception as e:
     st.error(f"Error loading data: {str(e)}")
 
 # Close the database connection when done
-conn.close() 
+conn.close()
+
+# Get the port from Heroku environment
+port = int(os.environ.get('PORT', 8501)) 
