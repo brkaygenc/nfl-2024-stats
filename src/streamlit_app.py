@@ -1,8 +1,13 @@
 import streamlit as st
 import pandas as pd
+import sys
 import os
-from sqlalchemy import create_engine
-import re
+
+# Add the project root directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.database import get_db_connection
+import plotly.express as px
 
 # Database configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
@@ -13,8 +18,11 @@ try:
     if DATABASE_URL.startswith('postgres://'):
         DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
     
-    # Create SQLAlchemy engine
-    engine = create_engine(DATABASE_URL, connect_args={'sslmode': 'require'})
+    # Create SQLAlchemy engine with appropriate SSL mode
+    if 'localhost' in DATABASE_URL:
+        engine = create_engine(DATABASE_URL)
+    else:
+        engine = create_engine(DATABASE_URL, connect_args={'sslmode': 'require'})
 except Exception as e:
     st.error(f"Failed to connect to database: {str(e)}")
     st.stop()
@@ -69,19 +77,88 @@ if view_mode == "Stats View":
                 playerid,
                 team,
                 COALESCE(tackles, 0) as tackles,
+                COALESCE(tackles_ast, 0) as tackles_ast,
                 COALESCE(sacks, 0) as sacks,
+                COALESCE(tackles_tfl, 0) as tackles_tfl,
                 COALESCE(interceptions, 0) as interceptions,
+                COALESCE(forced_fumbles, 0) as forced_fumbles,
+                COALESCE(fumble_recoveries, 0) as fumble_recoveries,
+                COALESCE(passes_defended, 0) as passes_defended,
+                COALESCE(qb_hits, 0) as qb_hits,
                 COALESCE(totalpoints, 0) as totalpoints,
                 rank
             FROM {table_name}
             ORDER BY totalpoints DESC
         """
-    else:
-        query = f"SELECT * FROM {table_name}"
+    elif position == "QB":
+        query = f"""
+            SELECT 
+                playername,
+                playerid,
+                team,
+                COALESCE(passingyards, 0) as passingyards,
+                COALESCE(passingtds, 0) as passingtds,
+                COALESCE(interceptions, 0) as interceptions,
+                COALESCE(rushingyards, 0) as rushingyards,
+                COALESCE(rushingtds, 0) as rushingtds,
+                COALESCE(totalpoints, 0) as totalpoints,
+                rank
+            FROM {table_name}
+            ORDER BY totalpoints DESC
+        """
+    elif position == "RB":
+        query = f"""
+            SELECT 
+                playername,
+                playerid,
+                team,
+                COALESCE(rushingyards, 0) as rushingyards,
+                COALESCE(rushingtds, 0) as rushingtds,
+                COALESCE(receptions, 0) as receptions,
+                COALESCE(receivingyards, 0) as receivingyards,
+                COALESCE(receivingtds, 0) as receivingtds,
+                COALESCE(totalpoints, 0) as totalpoints,
+                rank
+            FROM {table_name}
+            ORDER BY totalpoints DESC
+        """
+    elif position in ["WR", "TE"]:
+        query = f"""
+            SELECT 
+                playername,
+                playerid,
+                team,
+                COALESCE(receptions, 0) as receptions,
+                COALESCE(targets, 0) as targets,
+                COALESCE(receivingyards, 0) as receivingyards,
+                COALESCE(receivingtds, 0) as receivingtds,
+                COALESCE(totalpoints, 0) as totalpoints,
+                rank
+            FROM {table_name}
+            ORDER BY totalpoints DESC
+        """
+    else:  # Kickers
+        query = f"""
+            SELECT 
+                playername,
+                playerid,
+                team,
+                COALESCE(fieldgoals, 0) as fieldgoals,
+                COALESCE(fieldgoalattempts, 0) as fieldgoalattempts,
+                COALESCE(extrapoints, 0) as extrapoints,
+                COALESCE(extrapointattempts, 0) as extrapointattempts,
+                COALESCE(totalpoints, 0) as totalpoints,
+                rank
+            FROM {table_name}
+            ORDER BY totalpoints DESC
+        """
 
     try:
         # Read data into a pandas DataFrame using SQLAlchemy engine
         df = pd.read_sql_query(query, engine)
+        
+        # Convert totalpoints to numeric, replacing any invalid values with 0
+        df['totalpoints'] = pd.to_numeric(df['totalpoints'], errors='coerce').fillna(0)
         
         # Display the data
         st.dataframe(df)
@@ -96,8 +173,8 @@ if view_mode == "Stats View":
             top_10 = df.nlargest(10, 'totalpoints')[['playername', 'playerid', 'team', 'totalpoints']]
             st.dataframe(top_10)
         elif position in ["LB", "DL", "DB"]:
-            st.subheader(f"Top 10 {position}s by Tackles")
-            top_10 = df.nlargest(10, 'tackles')[['playername', 'playerid', 'team', 'tackles', 'sacks', 'interceptions']]
+            st.subheader(f"Top 10 {position}s by Total Points")
+            top_10 = df.nlargest(10, 'totalpoints')[['playername', 'playerid', 'team', 'tackles', 'tackles_ast', 'sacks', 'tackles_tfl', 'interceptions', 'forced_fumbles', 'fumble_recoveries', 'passes_defended', 'qb_hits', 'totalpoints']]
             st.dataframe(top_10)
         elif position == "K":
             st.subheader("Kicker Rankings")

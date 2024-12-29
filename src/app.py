@@ -1,6 +1,11 @@
 from flask import Flask, jsonify, request
-from database import get_db_connection
+import sys
 import os
+
+# Add the project root directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.database import get_db_connection
 import psycopg2
 from functools import wraps
 
