@@ -22,10 +22,23 @@ st.title("NFL Stats 2024 🏈")
 # Sidebar for filtering
 st.sidebar.header("Filters")
 
-# Position selection
+# Position groups
+position_groups = {
+    "Offense": ["QB", "RB", "WR", "TE"],
+    "Defense": ["LB", "DL", "DB"],
+    "Special Teams": ["K"]
+}
+
+# Position group selection
+position_group = st.sidebar.selectbox(
+    "Select Position Group",
+    list(position_groups.keys())
+)
+
+# Position selection based on group
 position = st.sidebar.selectbox(
     "Select Position",
-    ["QB", "RB", "WR", "TE", "K", "LB", "DL", "DB"]
+    position_groups[position_group]
 )
 
 # Get table name based on position
@@ -44,6 +57,20 @@ try:
     # Basic stats
     st.subheader("Summary Statistics")
     st.write(df.describe())
+    
+    # Additional position-specific stats
+    if position in ["QB", "RB", "WR", "TE"]:
+        st.subheader(f"Top 10 {position}s by Total Points")
+        top_10 = df.nlargest(10, 'totalpoints')[['playername', 'team', 'totalpoints']]
+        st.dataframe(top_10)
+    elif position in ["LB", "DL", "DB"]:
+        st.subheader(f"Top 10 {position}s by Tackles")
+        top_10 = df.nlargest(10, 'tackles')[['playername', 'team', 'tackles', 'sacks', 'interceptions']]
+        st.dataframe(top_10)
+    elif position == "K":
+        st.subheader("Kicker Rankings")
+        kicker_stats = df[['playername', 'team', 'totalpoints']]
+        st.dataframe(kicker_stats)
     
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
