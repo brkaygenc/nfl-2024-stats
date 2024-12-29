@@ -8,11 +8,8 @@ DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
 
 # Create a connection to the database
 try:
-    # If using local database, don't require SSL
-    if 'localhost' in DATABASE_URL:
-        conn = psycopg2.connect(DATABASE_URL)
-    else:
-        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    # Always use SSL for Heroku PostgreSQL
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
 except psycopg2.Error as e:
     st.error(f"Failed to connect to database: {str(e)}")
     st.stop()
