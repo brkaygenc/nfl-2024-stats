@@ -1,16 +1,20 @@
 import streamlit as st
 import pandas as pd
-import psycopg2
 import os
+from sqlalchemy import create_engine
 
 # Database configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
 
-# Create a connection to the database
+# Create a connection to the database using SQLAlchemy
 try:
-    # Always use SSL for Heroku PostgreSQL
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-except psycopg2.Error as e:
+    # Replace 'postgres://' with 'postgresql://' for SQLAlchemy
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    
+    # Create SQLAlchemy engine
+    engine = create_engine(DATABASE_URL, connect_args={'sslmode': 'require'})
+except Exception as e:
     st.error(f"Failed to connect to database: {str(e)}")
     st.stop()
 
@@ -67,8 +71,8 @@ else:
     query = f"SELECT * FROM {table_name}"
 
 try:
-    # Read data into a pandas DataFrame
-    df = pd.read_sql_query(query, conn)
+    # Read data into a pandas DataFrame using SQLAlchemy engine
+    df = pd.read_sql_query(query, engine)
     
     # Display the data
     st.dataframe(df)
@@ -93,8 +97,5 @@ try:
     
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
-
-# Close the database connection when done
-conn.close()
 
 # Remove the port configuration as it's handled by setup.sh 
