@@ -1,15 +1,8 @@
 import streamlit as st
 import pandas as pd
-import sys
 import os
 import re
 from sqlalchemy import create_engine, text
-
-# Add the project root directory to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.database import connect_to_db
-import plotly.express as px
 
 # Database configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
@@ -25,10 +18,6 @@ try:
         engine = create_engine(DATABASE_URL)
     else:
         engine = create_engine(DATABASE_URL, connect_args={'sslmode': 'require'})
-        
-    # Test the connection
-    with engine.connect() as conn:
-        conn.execute(text("SELECT 1"))
 except Exception as e:
     st.error(f"Failed to connect to database: {str(e)}")
     st.stop()
