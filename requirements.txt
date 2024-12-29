@@ -4,4 +4,5 @@ python-dotenv
 Flask
 pandas
 plotly
-gunicorn 
+gunicorn
+SQLAlchemy 
