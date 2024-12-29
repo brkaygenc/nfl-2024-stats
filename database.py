@@ -213,6 +213,24 @@ def load_json_data(position, filename):
                         int(player['Rank']) if player['Rank'] else 0
                     ))
                 elif position == 'K':
+                    # Calculate total field goals and attempts
+                    fg_made = sum([
+                        int(player.get('FgMade_0-19', 0) or 0),
+                        int(player.get('FgMade_20-29', 0) or 0),
+                        int(player.get('FgMade_30-39', 0) or 0),
+                        int(player.get('FgMade_40-49', 0) or 0),
+                        int(player.get('FgMade_50', 0) or 0)
+                    ])
+                    fg_attempts = fg_made + sum([
+                        int(player.get('FgMiss_0-19', 0) or 0),
+                        int(player.get('FgMiss_20-29', 0) or 0),
+                        int(player.get('FgMiss_30-39', 0) or 0),
+                        int(player.get('FgMiss_40-49', 0) or 0),
+                        int(player.get('FgMiss_50', 0) or 0)
+                    ])
+                    pat_made = int(player.get('PatMade', 0) or 0)
+                    pat_attempts = pat_made + int(player.get('PatMissed', 0) or 0)
+                    
                     cur.execute("""
                         INSERT INTO k_stats (playername, playerid, team,
                             fieldgoals, fieldgoalattempts,
@@ -221,14 +239,17 @@ def load_json_data(position, filename):
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         player['PlayerName'], player['PlayerId'], player['Team'],
-                        int(player['FieldGoals']) if player.get('FieldGoals') else 0,
-                        int(player['FieldGoalAttempts']) if player.get('FieldGoalAttempts') else 0,
-                        int(player['ExtraPoints']) if player.get('ExtraPoints') else 0,
-                        int(player['ExtraPointAttempts']) if player.get('ExtraPointAttempts') else 0,
+                        fg_made, fg_attempts,
+                        pat_made, pat_attempts,
                         float(player['TotalPoints']) if player['TotalPoints'] else 0,
                         int(player['Rank']) if player['Rank'] else 0
                     ))
                 elif position in ['LB', 'DL', 'DB']:
+                    # Get defensive stats from the correct fields
+                    tackles = int(player['DefTackles']) if player.get('DefTackles') else 0
+                    sacks = float(player['DefSacks']) if player.get('DefSacks') else 0
+                    interceptions = int(player['DefInt']) if player.get('DefInt') else 0
+                    
                     cur.execute(f"""
                         INSERT INTO {position.lower()}_stats (playername, playerid, team,
                             tackles, sacks, interceptions,
@@ -236,9 +257,7 @@ def load_json_data(position, filename):
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         player['PlayerName'], player['PlayerId'], player['Team'],
-                        int(player['Tackles']) if player.get('Tackles') else 0,
-                        float(player['Sacks']) if player.get('Sacks') else 0,
-                        int(player['Interceptions']) if player.get('Interceptions') else 0,
+                        tackles, sacks, interceptions,
                         float(player['TotalPoints']) if player['TotalPoints'] else 0,
                         int(player['Rank']) if player['Rank'] else 0
                     ))
