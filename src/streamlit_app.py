@@ -8,7 +8,6 @@ from sqlalchemy import create_engine
 # Add the project root directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.database import get_db_connection
 import plotly.express as px
 
 # Database configuration
@@ -25,6 +24,10 @@ try:
         engine = create_engine(DATABASE_URL)
     else:
         engine = create_engine(DATABASE_URL, connect_args={'sslmode': 'require'})
+        
+    # Test the connection
+    with engine.connect() as conn:
+        conn.execute("SELECT 1")
 except Exception as e:
     st.error(f"Failed to connect to database: {str(e)}")
     st.stop()
