@@ -2,16 +2,14 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import os
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Get the DATABASE_URL from environment variable
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# Database connection
-def get_db_connection():
-    return psycopg2.connect(os.getenv('DATABASE_URL'))
+# Create a connection to the database
+conn = psycopg2.connect(DATABASE_URL)
 
-# Page config
+# Set page config
 st.set_page_config(
     page_title="NFL Stats 2024",
     page_icon="🏈",
@@ -21,39 +19,34 @@ st.set_page_config(
 # Title
 st.title("NFL Stats 2024 🏈")
 
-# Sidebar filters
+# Sidebar for filtering
 st.sidebar.header("Filters")
+
+# Position selection
 position = st.sidebar.selectbox(
     "Select Position",
     ["QB", "RB", "WR", "TE", "K", "LB", "DL", "DB"]
 )
 
-# Get data based on position
-@st.cache_data
-def load_data(position):
-    conn = get_db_connection()
-    query = f"SELECT * FROM {position.lower()}_season"
-    df = pd.read_sql_query(query, conn)
-    conn.close()
-    return df
+# Get table name based on position
+table_name = f"{position.lower()}_stats"
+
+# Query to get all data for the selected position
+query = f"SELECT * FROM {table_name}"
 
 try:
-    # Load and display data
-    df = load_data(position)
+    # Read data into a pandas DataFrame
+    df = pd.read_sql_query(query, conn)
     
-    # Display stats
-    st.header(f"{position} Statistics")
+    # Display the data
     st.dataframe(df)
     
     # Basic stats
     st.subheader("Summary Statistics")
     st.write(df.describe())
-
+    
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
-    st.info("Make sure the database is properly configured and contains data.")
 
-# For Heroku deployment
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8501))
-    st.run(port=port) 
+# Close the database connection when done
+conn.close() 
