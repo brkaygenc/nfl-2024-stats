@@ -58,6 +58,7 @@ if position in ["LB", "DL", "DB"]:
     query = f"""
         SELECT 
             playername,
+            playerid,
             team,
             COALESCE(tackles, 0) as tackles,
             COALESCE(sacks, 0) as sacks,
@@ -84,15 +85,15 @@ try:
     # Additional position-specific stats
     if position in ["QB", "RB", "WR", "TE"]:
         st.subheader(f"Top 10 {position}s by Total Points")
-        top_10 = df.nlargest(10, 'totalpoints')[['playername', 'team', 'totalpoints']]
+        top_10 = df.nlargest(10, 'totalpoints')[['playername', 'playerid', 'team', 'totalpoints']]
         st.dataframe(top_10)
     elif position in ["LB", "DL", "DB"]:
         st.subheader(f"Top 10 {position}s by Tackles")
-        top_10 = df.nlargest(10, 'tackles')[['playername', 'team', 'tackles', 'sacks', 'interceptions']]
+        top_10 = df.nlargest(10, 'tackles')[['playername', 'playerid', 'team', 'tackles', 'sacks', 'interceptions']]
         st.dataframe(top_10)
     elif position == "K":
         st.subheader("Kicker Rankings")
-        kicker_stats = df[['playername', 'team', 'totalpoints']]
+        kicker_stats = df[['playername', 'playerid', 'team', 'totalpoints']]
         st.dataframe(kicker_stats)
     
 except Exception as e:
