@@ -51,4 +51,9 @@ try:
 
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
-    st.info("Make sure the database is properly configured and contains data.") 
+    st.info("Make sure the database is properly configured and contains data.")
+
+# For Heroku deployment
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8501))
+    st.run(port=port) 
