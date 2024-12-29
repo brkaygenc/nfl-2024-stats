@@ -1,6 +1,11 @@
 # NFL Stats 2024
 
-A comprehensive NFL statistics database and visualization project.
+A comprehensive NFL statistics database and visualization project that provides player statistics across different positions with both API and web interface access.
+
+## Live Demo
+
+- Web Interface: [https://nfl-website-db-8d1f1be10618.herokuapp.com/](https://nfl-website-db-8d1f1be10618.herokuapp.com/)
+- API Endpoint: [https://nfl-website-db-8d1f1be10618.herokuapp.com/api](https://nfl-website-db-8d1f1be10618.herokuapp.com/api)
 
 ## Project Structure
 
@@ -39,67 +44,103 @@ nfl-stats-2024/
 
 ## Features
 
-- Complete NFL player statistics database
-- REST API for data access
-- Interactive web interface using Streamlit
-- Stored procedures for complex queries
-- Team and player statistics visualization
-- Position-based player rankings
-- Team roster management
+- Complete NFL player statistics database for the 2024 season
+- REST API for programmatic data access
+- Interactive web interface built with Streamlit featuring:
+  - Position-based player statistics
+  - Team roster views
+  - Custom SQL query interface
+  - Data visualization and analytics
+- Stored procedures for complex database operations
+- Support for multiple player positions (QB, RB, WR, TE, K, DB, DL, LB)
+- Comprehensive team statistics
 
-## Setup
+## Web Interface
 
-1. Create a virtual environment:
+The Streamlit web interface offers two main modes:
+
+1. **Stats View**
+   - Filter players by position groups (Offense, Defense, Special Teams)
+   - View detailed statistics for each position
+   - See top players rankings
+   - Access summary statistics
+
+2. **SQL Query Mode**
+   - Write and execute custom SQL queries
+   - View query results in tabular format
+   - Access example queries
+   - See available tables and their structure
+
+## Local Development Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/brkaygenc/nfl-2024-stats.git
+cd nfl-2024-stats
+```
+
+2. Create a virtual environment:
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. Install dependencies:
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Set up environment variables:
+4. Set up PostgreSQL database and configure environment variables:
 ```bash
-cp config/.env.example config/.env
-# Edit config/.env with your database credentials
+# Create a .env file in the config directory with:
+DATABASE_URL=postgresql://username:password@localhost/nfl_stats
 ```
 
-4. Initialize the database:
+5. Initialize the database:
 ```bash
 python src/database.py
 ```
 
-5. Run the application:
+6. Create stored procedures:
 ```bash
-# For Flask API
+python src/create_procedures.py
+```
+
+7. Run the applications:
+```bash
+# For Flask API (in one terminal)
 python src/app.py
 
-# For Streamlit interface
+# For Streamlit interface (in another terminal)
 streamlit run src/streamlit_app.py
 ```
 
 ## API Endpoints
 
-- `/teams` - List all teams
-- `/players/<position>` - Get players by position
-- `/players/team/<team>` - Get players by team
-- `/players/search` - Search players
-- `/stats/position/<position>` - Get position-specific stats
+- `GET /api/teams` - List all teams
+- `GET /api/players/<position>` - Get players by position (QB, RB, WR, TE, K, DB, DL, LB)
+- `GET /api/players/team/<team>` - Get all players for a specific team
+- `GET /api/stats/<position>` - Get detailed statistics for a position
+- `GET /api/team/points/<team>` - Get total points for a team
 
 ## Database Features
 
-- Multiple related tables for different positions
-- Stored procedures for complex queries
-- Data validation and error handling
+- Optimized PostgreSQL database schema
+- Stored procedures for complex queries:
+  - `get_team_player_stats(team_code)` - Get all players and their stats for a team
+  - `calculate_team_points(team_code)` - Calculate total points for a team
+  - `get_top_position_players(position, limit)` - Get top players for a position
 - Efficient data loading and updates
-- Team and player statistics tracking
+- SSL-secured database connections
 
 ## Deployment
 
-The application is deployed on Heroku with a PostgreSQL database.
+The application is deployed on Heroku with:
+- PostgreSQL database for data storage
+- Automatic SSL database connections
+- Separate processes for API and Streamlit interface
+- Environment variable configuration
 
 ## Contributing
 
-Feel free to submit issues and enhancement requests! 
+Contributions are welcome! Please feel free to submit issues and pull requests. 
