@@ -100,5 +100,4 @@ except Exception as e:
 # Close the database connection when done
 conn.close()
 
-# Get the port from Heroku environment
-port = int(os.environ.get('PORT', 8501)) 
+# Remove the port configuration as it's handled by setup.sh 
