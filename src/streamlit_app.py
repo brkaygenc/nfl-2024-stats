@@ -242,11 +242,12 @@ else:
         else:
             st.warning("Please enter a SQL query.")
 
-# Add a new section for testing procedures
-st.header("Database Procedures Testing")
+# Test Procedures Section
+st.header("Test Database Procedures")
 
-# Test Team Stats Procedure
-st.subheader("Test Team Stats Procedure")
+# 1. Test Team Stats Procedure
+st.subheader("1. Team Stats Procedure")
+st.write("This procedure shows all players and their points for a selected team.")
 team_code = st.selectbox("Select Team", ["KC", "SF", "DAL", "PHI", "BUF"])
 if st.button("Get Team Stats"):
     conn = get_db_connection()
@@ -265,14 +266,20 @@ if st.button("Get Team Stats"):
         cur.close()
         conn.close()
 
-# Test Trigger - Update Player Stats
-st.subheader("Test Points Calculation Trigger")
+# 2. Test Points Calculation
+st.subheader("2. Points Calculation Trigger")
+st.write("""
+This demonstrates how points are automatically calculated when player stats are updated.
+The trigger will recalculate points based on the formula:
+- QB Points = (PassingYards × 0.04) + (PassingTDs × 4) + (Interceptions × -2) + (RushingYards × 0.1) + (RushingTDs × 6)
+""")
+
 player_name = st.text_input("Enter QB Name (e.g., Patrick Mahomes)")
 passing_yards = st.number_input("Passing Yards", min_value=0, value=300)
 passing_tds = st.number_input("Passing TDs", min_value=0, value=3)
 interceptions = st.number_input("Interceptions", min_value=0, value=0)
 
-if st.button("Update QB Stats"):
+if st.button("Update Stats & Calculate Points"):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -286,34 +293,19 @@ if st.button("Update QB Stats"):
         
         result = cur.fetchone()
         if result:
-            st.success(f"Updated {result[0]}'s points to: {result[1]}")
+            st.success(f"""
+            ✅ Stats Updated Successfully!
+            - Player: {result[0]}
+            - New Points: {result[1]}
+            
+            The points were automatically calculated by the trigger.
+            """)
             conn.commit()
         else:
-            st.warning("Player not found")
+            st.warning("Player not found. Please check the name.")
             
     except Exception as e:
-        st.error(f"Error: {str(e)}")
-        conn.rollback()
-    finally:
-        cur.close()
-        conn.close()
-
-# Test Rank Validation Trigger
-st.subheader("Test Rank Validation Trigger")
-test_rank = st.number_input("Enter Rank (try negative to test trigger)", value=1)
-if st.button("Test Rank Validation"):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            UPDATE qb_stats 
-            SET rank = %s
-            WHERE playername = 'Patrick Mahomes'
-        """, (test_rank,))
-        conn.commit()
-        st.success("Rank updated successfully!")
-    except Exception as e:
-        st.error(f"Trigger prevented invalid rank: {str(e)}")
+        st.error(f"Error updating stats: {str(e)}")
         conn.rollback()
     finally:
         cur.close()
