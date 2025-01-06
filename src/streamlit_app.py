@@ -5,6 +5,13 @@ import re
 from sqlalchemy import create_engine, text
 from database import get_db_connection
 
+# Set page config - MUST BE FIRST STREAMLIT COMMAND
+st.set_page_config(
+    page_title="NFL Stats 2024",
+    page_icon="🏈",
+    layout="wide"
+)
+
 # Database configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
 
@@ -28,13 +35,6 @@ try:
 except Exception as e:
     st.error(f"Failed to connect to database: {str(e)}")
     st.stop()
-
-# Set page config
-st.set_page_config(
-    page_title="NFL Stats 2024",
-    page_icon="🏈",
-    layout="wide"
-)
 
 # Title
 st.title("NFL Stats 2024 🏈")
