@@ -188,8 +188,9 @@ if view_mode == "Stats View":
 
 else:
     # SQL Query view
-    st.sidebar.header("Available Tables")
+    st.sidebar.header("Available Tables and Procedures")
     st.sidebar.markdown("""
+    **Tables:**
     - qb_stats
     - rb_stats
     - wr_stats
@@ -198,6 +199,12 @@ else:
     - dl_stats
     - db_stats
     - k_stats
+    
+    **Procedures:**
+    - get_team_player_stats(team_code)
+    
+    **Triggers:**
+    - Points calculation on QB/RB stats update
     """)
 
     # Example queries
@@ -207,108 +214,106 @@ else:
     SELECT * FROM qb_stats WHERE totalpoints > 200
     ```
     ```sql
-    SELECT playername, team, tackles FROM lb_stats ORDER BY tackles DESC LIMIT 5
+    SELECT * FROM get_team_player_stats('KC')
     ```
     """)
 
-    # Main query input area
-    st.subheader("Custom SQL Query")
-    query = st.text_area("Enter your SQL query:", height=150)
+    # Create tabs for SQL Query and Procedures
+    tab1, tab2 = st.tabs(["SQL Query", "Test Procedures & Triggers"])
     
-    # Execute button
-    if st.button("Execute Query"):
-        if query:
-            # Basic SQL injection prevention
-            if re.search(r'\b(DELETE|INSERT|UPDATE|DROP|CREATE|ALTER)\b', query, re.IGNORECASE):
-                st.error("Only SELECT queries are allowed!")
-            elif not query.strip().upper().startswith('SELECT'):
-                st.error("Only SELECT queries are allowed!")
-            else:
-                try:
-                    df = pd.read_sql_query(query, engine)
-                    st.success("Query executed successfully!")
-                    st.dataframe(df)
-                    
-                    # Show row count
-                    st.info(f"Number of rows returned: {len(df)}")
-                    
-                    # Show basic stats for numeric columns
-                    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
-                    if not numeric_cols.empty:
-                        st.subheader("Summary Statistics for Numeric Columns")
-                        st.write(df[numeric_cols].describe())
-                except Exception as e:
-                    st.error(f"Error executing query: {str(e)}")
-        else:
-            st.warning("Please enter a SQL query.")
-
-# Test Procedures Section
-st.header("Test Database Procedures")
-
-# 1. Test Team Stats Procedure
-st.subheader("1. Team Stats Procedure")
-st.write("This procedure shows all players and their points for a selected team.")
-team_code = st.selectbox("Select Team", ["KC", "SF", "DAL", "PHI", "BUF"])
-if st.button("Get Team Stats"):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT * FROM get_team_player_stats(%s)", (team_code,))
-        results = cur.fetchall()
-        if results:
-            df = pd.DataFrame(results, columns=['Player Name', 'Position', 'Team', 'Points'])
-            st.dataframe(df)
-        else:
-            st.warning("No players found for this team")
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
-    finally:
-        cur.close()
-        conn.close()
-
-# 2. Test Points Calculation
-st.subheader("2. Points Calculation Trigger")
-st.write("""
-This demonstrates how points are automatically calculated when player stats are updated.
-The trigger will recalculate points based on the formula:
-- QB Points = (PassingYards × 0.04) + (PassingTDs × 4) + (Interceptions × -2) + (RushingYards × 0.1) + (RushingTDs × 6)
-""")
-
-player_name = st.text_input("Enter QB Name (e.g., Patrick Mahomes)")
-passing_yards = st.number_input("Passing Yards", min_value=0, value=300)
-passing_tds = st.number_input("Passing TDs", min_value=0, value=3)
-interceptions = st.number_input("Interceptions", min_value=0, value=0)
-
-if st.button("Update Stats & Calculate Points"):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        # Update stats and return new points
-        cur.execute("""
-            UPDATE qb_stats 
-            SET passingyards = %s, passingtds = %s, interceptions = %s
-            WHERE playername = %s
-            RETURNING playername, totalpoints;
-        """, (passing_yards, passing_tds, interceptions, player_name))
+    with tab1:
+        st.subheader("Custom SQL Query")
+        query = st.text_area("Enter your SQL query:", height=150)
         
-        result = cur.fetchone()
-        if result:
-            st.success(f"""
-            ✅ Stats Updated Successfully!
-            - Player: {result[0]}
-            - New Points: {result[1]}
-            
-            The points were automatically calculated by the trigger.
-            """)
-            conn.commit()
-        else:
-            st.warning("Player not found. Please check the name.")
-            
-    except Exception as e:
-        st.error(f"Error updating stats: {str(e)}")
-        conn.rollback()
-    finally:
-        cur.close()
-        conn.close()
+        if st.button("Execute Query"):
+            if query:
+                # Basic SQL injection prevention
+                if re.search(r'\b(DELETE|INSERT|UPDATE|DROP|CREATE|ALTER)\b', query, re.IGNORECASE):
+                    st.error("Only SELECT queries are allowed!")
+                elif not query.strip().upper().startswith('SELECT'):
+                    st.error("Only SELECT queries are allowed!")
+                else:
+                    try:
+                        df = pd.read_sql_query(query, engine)
+                        st.success("Query executed successfully!")
+                        st.dataframe(df)
+                        st.info(f"Number of rows returned: {len(df)}")
+                        
+                        numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+                        if not numeric_cols.empty:
+                            st.subheader("Summary Statistics for Numeric Columns")
+                            st.write(df[numeric_cols].describe())
+                    except Exception as e:
+                        st.error(f"Error executing query: {str(e)}")
+            else:
+                st.warning("Please enter a SQL query.")
+    
+    with tab2:
+        st.header("Test Database Procedures")
+
+        # 1. Team Stats Procedure
+        st.subheader("1. Team Stats Procedure")
+        st.write("This procedure shows all players and their points for a selected team.")
+        team_code = st.selectbox("Select Team", ["KC", "SF", "DAL", "PHI", "BUF"])
+        if st.button("Get Team Stats"):
+            conn = get_db_connection()
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT * FROM get_team_player_stats(%s)", (team_code,))
+                results = cur.fetchall()
+                if results:
+                    df = pd.DataFrame(results, columns=['Player Name', 'Position', 'Team', 'Points'])
+                    st.dataframe(df)
+                else:
+                    st.warning("No players found for this team")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+            finally:
+                cur.close()
+                conn.close()
+
+        # 2. Points Calculation Trigger
+        st.subheader("2. Points Calculation Trigger")
+        st.write("""
+        This demonstrates how points are automatically calculated when player stats are updated.
+        The trigger will recalculate points based on the formula:
+        - QB Points = (PassingYards × 0.04) + (PassingTDs × 4) + (Interceptions × -2) + (RushingYards × 0.1) + (RushingTDs × 6)
+        """)
+
+        player_name = st.text_input("Enter QB Name (e.g., Patrick Mahomes)")
+        passing_yards = st.number_input("Passing Yards", min_value=0, value=300)
+        passing_tds = st.number_input("Passing TDs", min_value=0, value=3)
+        interceptions = st.number_input("Interceptions", min_value=0, value=0)
+
+        if st.button("Update Stats & Calculate Points"):
+            conn = get_db_connection()
+            cur = conn.cursor()
+            try:
+                cur.execute("""
+                    UPDATE qb_stats 
+                    SET passingyards = %s, passingtds = %s, interceptions = %s
+                    WHERE playername = %s
+                    RETURNING playername, totalpoints;
+                """, (passing_yards, passing_tds, interceptions, player_name))
+                
+                result = cur.fetchone()
+                if result:
+                    st.success(f"""
+                    ✅ Stats Updated Successfully!
+                    - Player: {result[0]}
+                    - New Points: {result[1]}
+                    
+                    The points were automatically calculated by the trigger.
+                    """)
+                    conn.commit()
+                else:
+                    st.warning("Player not found. Please check the name.")
+                    
+            except Exception as e:
+                st.error(f"Error updating stats: {str(e)}")
+                conn.rollback()
+            finally:
+                cur.close()
+                conn.close()
 
 # Remove the port configuration as it's handled by setup.sh 
