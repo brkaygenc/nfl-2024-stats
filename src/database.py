@@ -382,7 +382,7 @@ def load_json_data(conn):
         # Load defensive player stats (LB, DL, DB)
         for pos in ['LB', 'DL', 'DB']:
             try:
-                if not os.path.exists(os.path.join(data_dir, f'{pos}_season.json'):
+                if not os.path.exists(os.path.join(data_dir, f'{pos}_season.json')):
                     print(f"Warning: {pos}_season.json not found")
                     continue
                     
