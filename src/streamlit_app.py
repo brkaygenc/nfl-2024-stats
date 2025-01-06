@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import re
 from sqlalchemy import create_engine, text
+from database import get_db_connection
 
 # Database configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
@@ -17,7 +18,13 @@ try:
     if 'localhost' in DATABASE_URL:
         engine = create_engine(DATABASE_URL)
     else:
+        # For Heroku, we need to specify SSL mode
         engine = create_engine(DATABASE_URL, connect_args={'sslmode': 'require'})
+    
+    # Test the connection
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+        st.success("Successfully connected to the database!")
 except Exception as e:
     st.error(f"Failed to connect to database: {str(e)}")
     st.stop()
@@ -234,5 +241,82 @@ else:
                     st.error(f"Error executing query: {str(e)}")
         else:
             st.warning("Please enter a SQL query.")
+
+# Add a new section for testing procedures
+st.header("Database Procedures Testing")
+
+# Test Team Stats Procedure
+st.subheader("Test Team Stats Procedure")
+team_code = st.selectbox("Select Team", ["KC", "SF", "DAL", "PHI", "BUF"])
+if st.button("Get Team Stats"):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM get_team_player_stats(%s)", (team_code,))
+        results = cur.fetchall()
+        if results:
+            df = pd.DataFrame(results, columns=['Player Name', 'Position', 'Team', 'Points'])
+            st.dataframe(df)
+        else:
+            st.warning("No players found for this team")
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
+
+# Test Trigger - Update Player Stats
+st.subheader("Test Points Calculation Trigger")
+player_name = st.text_input("Enter QB Name (e.g., Patrick Mahomes)")
+passing_yards = st.number_input("Passing Yards", min_value=0, value=300)
+passing_tds = st.number_input("Passing TDs", min_value=0, value=3)
+interceptions = st.number_input("Interceptions", min_value=0, value=0)
+
+if st.button("Update QB Stats"):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # Update stats and return new points
+        cur.execute("""
+            UPDATE qb_stats 
+            SET passingyards = %s, passingtds = %s, interceptions = %s
+            WHERE playername = %s
+            RETURNING playername, totalpoints;
+        """, (passing_yards, passing_tds, interceptions, player_name))
+        
+        result = cur.fetchone()
+        if result:
+            st.success(f"Updated {result[0]}'s points to: {result[1]}")
+            conn.commit()
+        else:
+            st.warning("Player not found")
+            
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
+# Test Rank Validation Trigger
+st.subheader("Test Rank Validation Trigger")
+test_rank = st.number_input("Enter Rank (try negative to test trigger)", value=1)
+if st.button("Test Rank Validation"):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE qb_stats 
+            SET rank = %s
+            WHERE playername = 'Patrick Mahomes'
+        """, (test_rank,))
+        conn.commit()
+        st.success("Rank updated successfully!")
+    except Exception as e:
+        st.error(f"Trigger prevented invalid rank: {str(e)}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
 
 # Remove the port configuration as it's handled by setup.sh 

@@ -225,12 +225,15 @@ def load_json_data(conn):
                          'TE_season.json', 'LB_season.json', 'DL_season.json', 'DB_season.json', 
                          'K_season.json']
         
-        missing_files = [f for f in required_files if not os.path.exists(f)]
+        # Get the data directory path
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+        
+        missing_files = [f for f in required_files if not os.path.exists(os.path.join(data_dir, f))]
         if missing_files:
             raise FileNotFoundError(f"Missing required files: {', '.join(missing_files)}")
 
         # Load teams data first
-        with open('teams.json', 'r') as f:
+        with open(os.path.join(data_dir, 'teams.json'), 'r') as f:
             teams_data = json.load(f)
             print(f"Loading teams data...")
             loaded_count = 0
@@ -258,7 +261,7 @@ def load_json_data(conn):
                 print(f"Successfully loaded {loaded_count} teams!")
 
         # Load QB stats
-        with open('QB_season.json', 'r') as f:
+        with open(os.path.join(data_dir, 'QB_season.json'), 'r') as f:
             qb_data = json.load(f)
             values = []
             for player in qb_data:
@@ -298,7 +301,7 @@ def load_json_data(conn):
                 print(f"Loaded {len(values)} QBs")
 
         # Load RB stats
-        with open('RB_season.json', 'r') as f:
+        with open(os.path.join(data_dir, 'RB_season.json'), 'r') as f:
             rb_data = json.load(f)
             values = []
             for player in rb_data:
@@ -339,7 +342,7 @@ def load_json_data(conn):
 
         # Load WR/TE stats
         for pos in ['WR', 'TE']:
-            with open(f'{pos}_season.json', 'r') as f:
+            with open(os.path.join(data_dir, f'{pos}_season.json'), 'r') as f:
                 pos_data = json.load(f)
                 values = []
                 for player in pos_data:
@@ -379,11 +382,11 @@ def load_json_data(conn):
         # Load defensive player stats (LB, DL, DB)
         for pos in ['LB', 'DL', 'DB']:
             try:
-                if not os.path.exists(f'{pos}_season.json'):
+                if not os.path.exists(os.path.join(data_dir, f'{pos}_season.json'):
                     print(f"Warning: {pos}_season.json not found")
                     continue
                     
-                with open(f'{pos}_season.json', 'r') as f:
+                with open(os.path.join(data_dir, f'{pos}_season.json'), 'r') as f:
                     def_data = json.load(f)
                     if not def_data:
                         continue
@@ -441,7 +444,7 @@ def load_json_data(conn):
                 print(f"Error processing {pos}_season.json")
 
         # Load K stats
-        with open('K_season.json', 'r') as f:
+        with open(os.path.join(data_dir, 'K_season.json'), 'r') as f:
             k_data = json.load(f)
             values = []
             for player in k_data:

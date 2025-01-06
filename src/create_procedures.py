@@ -1,25 +1,12 @@
-import sys
-import os
+import psycopg2
+from database import get_db_connection
 
-# Add the project root directory to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.database import get_db_connection
-
-def create_stored_procedures():
+def create_procedures_and_triggers():
     conn = get_db_connection()
     cur = conn.cursor()
     
     try:
-        # Drop existing procedures/functions
-        cur.execute("""
-            DROP FUNCTION IF EXISTS get_team_player_stats(VARCHAR) CASCADE;
-            DROP FUNCTION IF EXISTS calculate_team_points(VARCHAR) CASCADE;
-            DROP FUNCTION IF EXISTS get_top_position_players(VARCHAR, INTEGER) CASCADE;
-        """)
-        print("Dropped existing functions")
-
-        # Function 1: Get player stats by team
+        # Create get_team_player_stats function (this is used in the UI)
         cur.execute("""
             CREATE OR REPLACE FUNCTION get_team_player_stats(team_code_param VARCHAR)
             RETURNS TABLE (
@@ -59,13 +46,13 @@ def create_stored_procedures():
                     WHERE w.team = team_code_param
                     UNION ALL
                     SELECT 
-                        t.playername::VARCHAR,
+                        te.playername::VARCHAR,
                         'TE'::VARCHAR,
-                        tm.team_name::VARCHAR,
-                        t.totalpoints::NUMERIC
-                    FROM te_stats t
-                    JOIN teams tm ON tm.team_code = t.team
-                    WHERE t.team = team_code_param
+                        t.team_name::VARCHAR,
+                        te.totalpoints::NUMERIC
+                    FROM te_stats te
+                    JOIN teams t ON t.team_code = te.team
+                    WHERE te.team = team_code_param
                     UNION ALL
                     SELECT 
                         k.playername::VARCHAR,
@@ -80,95 +67,127 @@ def create_stored_procedures():
             END;
             $$ LANGUAGE plpgsql;
         """)
-        print("Created get_team_player_stats function")
-
-        # Function 2: Calculate team total points
+        
+        # Create rank validation trigger
         cur.execute("""
-            CREATE OR REPLACE FUNCTION calculate_team_points(team_code_param VARCHAR)
-            RETURNS TABLE (
-                team VARCHAR,
-                points NUMERIC,
-                players INTEGER
-            ) AS $$
+            CREATE OR REPLACE FUNCTION validate_rank()
+            RETURNS TRIGGER AS $$
             BEGIN
-                RETURN QUERY
-                WITH team_points AS (
-                    SELECT totalpoints FROM qb_stats q WHERE q.team = team_code_param
-                    UNION ALL
-                    SELECT totalpoints FROM rb_stats r WHERE r.team = team_code_param
-                    UNION ALL
-                    SELECT totalpoints FROM wr_stats w WHERE w.team = team_code_param
-                    UNION ALL
-                    SELECT totalpoints FROM te_stats t WHERE t.team = team_code_param
-                    UNION ALL
-                    SELECT totalpoints FROM k_stats k WHERE k.team = team_code_param
-                )
-                SELECT 
-                    team_code_param::VARCHAR,
-                    COALESCE(SUM(totalpoints), 0)::NUMERIC,
-                    COUNT(*)::INTEGER
-                FROM team_points;
+                IF NEW.rank <= 0 THEN
+                    RAISE EXCEPTION 'Rank must be positive: %', NEW.rank;
+                END IF;
+                RETURN NEW;
             END;
             $$ LANGUAGE plpgsql;
         """)
-        print("Created calculate_team_points function")
-
-        # Function 3: Get top players by position
+        
+        # Apply rank validation trigger to all stats tables
+        for table in ['qb_stats', 'rb_stats', 'wr_stats', 'te_stats', 'lb_stats', 'dl_stats', 'db_stats', 'k_stats']:
+            cur.execute(f"""
+                DROP TRIGGER IF EXISTS validate_{table}_rank ON {table};
+                CREATE TRIGGER validate_{table}_rank
+                    BEFORE INSERT OR UPDATE ON {table}
+                    FOR EACH ROW
+                    EXECUTE FUNCTION validate_rank();
+            """)
+        
+        # Create points calculation triggers for each position
+        # QB Points
         cur.execute("""
-            CREATE OR REPLACE FUNCTION get_top_position_players(pos VARCHAR, limit_count INTEGER)
-            RETURNS TABLE (
-                playername VARCHAR,
-                team VARCHAR,
-                points NUMERIC
-            ) AS $$
+            CREATE OR REPLACE FUNCTION calculate_qb_points()
+            RETURNS TRIGGER AS $$
             BEGIN
-                CASE pos
-                    WHEN 'QB' THEN
-                        RETURN QUERY
-                        SELECT q.playername::VARCHAR, q.team::VARCHAR, q.totalpoints::NUMERIC
-                        FROM qb_stats q
-                        ORDER BY q.totalpoints DESC
-                        LIMIT limit_count;
-                    WHEN 'RB' THEN
-                        RETURN QUERY
-                        SELECT r.playername::VARCHAR, r.team::VARCHAR, r.totalpoints::NUMERIC
-                        FROM rb_stats r
-                        ORDER BY r.totalpoints DESC
-                        LIMIT limit_count;
-                    WHEN 'WR' THEN
-                        RETURN QUERY
-                        SELECT w.playername::VARCHAR, w.team::VARCHAR, w.totalpoints::NUMERIC
-                        FROM wr_stats w
-                        ORDER BY w.totalpoints DESC
-                        LIMIT limit_count;
-                    WHEN 'TE' THEN
-                        RETURN QUERY
-                        SELECT t.playername::VARCHAR, t.team::VARCHAR, t.totalpoints::NUMERIC
-                        FROM te_stats t
-                        ORDER BY t.totalpoints DESC
-                        LIMIT limit_count;
-                    WHEN 'K' THEN
-                        RETURN QUERY
-                        SELECT k.playername::VARCHAR, k.team::VARCHAR, k.totalpoints::NUMERIC
-                        FROM k_stats k
-                        ORDER BY k.totalpoints DESC
-                        LIMIT limit_count;
-                    ELSE
-                        RAISE EXCEPTION 'Invalid position: %', pos;
-                END CASE;
+                NEW.totalpoints = (
+                    COALESCE(NEW.passingyards, 0) * 0.04 +
+                    COALESCE(NEW.passingtds, 0) * 4 +
+                    COALESCE(NEW.interceptions, 0) * -2 +
+                    COALESCE(NEW.rushingyards, 0) * 0.1 +
+                    COALESCE(NEW.rushingtds, 0) * 6
+                );
+                RETURN NEW;
             END;
             $$ LANGUAGE plpgsql;
+            
+            DROP TRIGGER IF EXISTS calculate_qb_points_trigger ON qb_stats;
+            CREATE TRIGGER calculate_qb_points_trigger
+                BEFORE INSERT OR UPDATE ON qb_stats
+                FOR EACH ROW
+                EXECUTE FUNCTION calculate_qb_points();
         """)
-        print("Created get_top_position_players function")
 
+        # RB Points
+        cur.execute("""
+            CREATE OR REPLACE FUNCTION calculate_rb_points()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.totalpoints = (
+                    COALESCE(NEW.rushingyards, 0) * 0.1 +
+                    COALESCE(NEW.rushingtds, 0) * 6 +
+                    COALESCE(NEW.receptions, 0) * 1 +
+                    COALESCE(NEW.receivingyards, 0) * 0.1 +
+                    COALESCE(NEW.receivingtds, 0) * 6
+                );
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            
+            DROP TRIGGER IF EXISTS calculate_rb_points_trigger ON rb_stats;
+            CREATE TRIGGER calculate_rb_points_trigger
+                BEFORE INSERT OR UPDATE ON rb_stats
+                FOR EACH ROW
+                EXECUTE FUNCTION calculate_rb_points();
+        """)
+
+        # Create update_player_stats procedure
+        cur.execute("""
+            CREATE OR REPLACE PROCEDURE update_player_stats(
+                p_playerid VARCHAR,
+                p_playername VARCHAR,
+                p_team VARCHAR,
+                p_stats JSON
+            )
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                -- Update QB stats if player is QB
+                IF EXISTS (SELECT 1 FROM qb_stats WHERE playerid = p_playerid) THEN
+                    UPDATE qb_stats
+                    SET playername = p_playername,
+                        team = p_team,
+                        passingyards = COALESCE((p_stats->>'passingyards')::INTEGER, passingyards),
+                        passingtds = COALESCE((p_stats->>'passingtds')::INTEGER, passingtds),
+                        interceptions = COALESCE((p_stats->>'interceptions')::INTEGER, interceptions),
+                        rushingyards = COALESCE((p_stats->>'rushingyards')::INTEGER, rushingyards),
+                        rushingtds = COALESCE((p_stats->>'rushingtds')::INTEGER, rushingtds)
+                    WHERE playerid = p_playerid;
+                -- Update RB stats if player is RB
+                ELSIF EXISTS (SELECT 1 FROM rb_stats WHERE playerid = p_playerid) THEN
+                    UPDATE rb_stats
+                    SET playername = p_playername,
+                        team = p_team,
+                        rushingyards = COALESCE((p_stats->>'rushingyards')::INTEGER, rushingyards),
+                        rushingtds = COALESCE((p_stats->>'rushingtds')::INTEGER, rushingtds),
+                        receptions = COALESCE((p_stats->>'receptions')::INTEGER, receptions),
+                        receivingyards = COALESCE((p_stats->>'receivingyards')::INTEGER, receivingyards),
+                        receivingtds = COALESCE((p_stats->>'receivingtds')::INTEGER, receivingtds)
+                    WHERE playerid = p_playerid;
+                END IF;
+                
+                COMMIT;
+            END;
+            $$;
+        """)
+        
         conn.commit()
-        print("Successfully created all stored functions!")
+        print("Successfully created all procedures and triggers!")
+        
     except Exception as e:
-        print(f"Error creating stored functions: {str(e)}")
+        print(f"Error creating procedures and triggers: {str(e)}")
         conn.rollback()
+        raise
     finally:
         cur.close()
         conn.close()
 
-if __name__ == "__main__":
-    create_stored_procedures() 
+if __name__ == '__main__':
+    create_procedures_and_triggers() 
