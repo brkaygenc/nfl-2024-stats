@@ -50,10 +50,11 @@ def health_check():
 
 @app.route('/api/players/<position>', methods=['GET'])
 def get_players_by_position(position):
-    if position not in {'QB', 'RB', 'WR', 'TE', 'K', 'DEF'}:
+    valid_positions = {'QB', 'RB', 'WR', 'TE', 'K', 'LB', 'DL', 'DB'}
+    if position not in valid_positions:
         return jsonify({
             'error': 'Invalid position',
-            'message': f"Position must be one of: QB, RB, WR, TE, K, DEF",
+            'message': f"Position must be one of: {', '.join(sorted(valid_positions))}",
             'provided': position
         }), 400
 
@@ -113,23 +114,26 @@ def get_players_by_position(position):
                 FROM k_stats
                 ORDER BY totalpoints DESC
             """
-        else:  # DEF
-            query = """
+        elif position in ['LB', 'DL', 'DB']:
+            query = f"""
                 SELECT 
                     playername as name,
-                    'DEF' as position,
+                    '{position}' as position,
                     team,
-                    0 as passing_yards,
-                    0 as rushing_yards,
-                    0 as touchdowns,
-                    interceptions
-                FROM (
-                    SELECT * FROM lb_stats
-                    UNION ALL
-                    SELECT * FROM dl_stats
-                    UNION ALL
-                    SELECT * FROM db_stats
-                ) as def_stats
+                    COALESCE(tackles, 0) as tackles,
+                    COALESCE(sacks, 0) as sacks,
+                    COALESCE(interceptions, 0) as interceptions,
+                    COALESCE(forced_fumbles, 0) as forced_fumbles,
+                    COALESCE(fumble_recoveries, 0) as fumble_recoveries,
+                    COALESCE(passes_defended, 0) as passes_defended,
+                    COALESCE(tackles_tfl, 0) as tackles_for_loss,
+                    COALESCE(qb_hits, 0) as qb_hits,
+                    COALESCE(safeties, 0) as safeties,
+                    COALESCE(blocked_kicks, 0) as blocked_kicks,
+                    COALESCE(special_teams_tackles, 0) as special_teams_tackles,
+                    COALESCE(defensive_touchdowns, 0) as defensive_touchdowns,
+                    COALESCE(totalpoints, 0) as total_points
+                FROM {position.lower()}_stats
                 ORDER BY totalpoints DESC
             """
 
@@ -143,7 +147,8 @@ def get_players_by_position(position):
         for row in results:
             player = {}
             for i, value in enumerate(row):
-                if columns[i] in ['passing_yards', 'rushing_yards', 'touchdowns', 'interceptions']:
+                # Convert all numeric fields to integers, handling None values
+                if isinstance(value, (int, float)) or (isinstance(value, str) and value.isdigit()):
                     player[columns[i]] = int(value) if value is not None else 0
                 else:
                     player[columns[i]] = value
