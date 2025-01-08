@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from database import get_db_connection
+from src.database import get_db_connection
 import psycopg2
 from functools import wraps
 import time
