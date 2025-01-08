@@ -79,9 +79,10 @@ def get_players_by_position(position):
                     'QB' as position,
                     team,
                     passingyards as passing_yards,
+                    passingtds as passing_touchdowns,
                     rushingyards as rushing_yards,
-                    passingtds + rushingtds as touchdowns,
-                    interceptions
+                    interceptions,
+                    totalpoints as total_points
                 FROM qb_stats
                 ORDER BY totalpoints DESC
             """
@@ -91,10 +92,11 @@ def get_players_by_position(position):
                     playername as name,
                     'RB' as position,
                     team,
-                    0 as passing_yards,
                     rushingyards as rushing_yards,
-                    rushingtds + receivingtds as touchdowns,
-                    0 as interceptions
+                    rushingtds as rushing_touchdowns,
+                    receptions,
+                    receivingyards as receiving_yards,
+                    totalpoints as total_points
                 FROM rb_stats
                 ORDER BY totalpoints DESC
             """
@@ -104,10 +106,11 @@ def get_players_by_position(position):
                     playername as name,
                     '{position}' as position,
                     team,
-                    0 as passing_yards,
-                    0 as rushing_yards,
-                    receivingtds as touchdowns,
-                    0 as interceptions
+                    receivingyards as receiving_yards,
+                    receptions,
+                    targets,
+                    receivingtds as receiving_touchdowns,
+                    totalpoints as total_points
                 FROM {position.lower()}_stats
                 ORDER BY totalpoints DESC
             """
@@ -117,10 +120,10 @@ def get_players_by_position(position):
                     playername as name,
                     'K' as position,
                     team,
-                    0 as passing_yards,
-                    0 as rushing_yards,
-                    0 as touchdowns,
-                    0 as interceptions
+                    fieldgoals as field_goals,
+                    fieldgoals_att as field_goals_attempted,
+                    extrapoints as extra_points,
+                    totalpoints as total_points
                 FROM k_stats
                 ORDER BY totalpoints DESC
             """
@@ -131,14 +134,11 @@ def get_players_by_position(position):
                     '{position}' as position,
                     team,
                     COALESCE(tackles, 0) as tackles,
-                    COALESCE(tackles_ast, 0) as assisted_tackles,
                     COALESCE(sacks, 0) as sacks,
                     COALESCE(interceptions, 0) as interceptions,
-                    COALESCE(forced_fumbles, 0) as forced_fumbles,
-                    COALESCE(fumble_recoveries, 0) as fumble_recoveries,
                     COALESCE(passes_defended, 0) as passes_defended,
+                    COALESCE(forced_fumbles, 0) as forced_fumbles,
                     COALESCE(tackles_tfl, 0) as tackles_for_loss,
-                    COALESCE(qb_hits, 0) as qb_hits,
                     COALESCE(totalpoints, 0) as total_points
                 FROM {position.lower()}_stats
                 ORDER BY totalpoints DESC
