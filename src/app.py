@@ -7,88 +7,86 @@ import time
 import os
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
-
-# Rate limiting configuration
-RATE_LIMIT = 100  # requests per minute
-rate_limit_data = {}
-
-def rate_limit(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # Get client IP
-        client_ip = request.remote_addr
-        current_time = time.time()
-        
-        # Initialize or clean up old rate limit data
-        if client_ip not in rate_limit_data:
-            rate_limit_data[client_ip] = []
-        rate_limit_data[client_ip] = [t for t in rate_limit_data[client_ip] if current_time - t < 60]
-        
-        # Check rate limit
-        if len(rate_limit_data[client_ip]) >= RATE_LIMIT:
-            return jsonify({
-                "error": "Rate limit exceeded",
-                "message": "Too many requests. Please try again later.",
-                "status": 429
-            }), 429
-        
-        # Add request timestamp
-        rate_limit_data[client_ip].append(current_time)
-        return f(*args, **kwargs)
-    return decorated_function
-
-# Root endpoint to verify API is working
-@app.route('/')
-def index():
-    return jsonify({
-        "message": "Welcome to NFL Stats API",
-        "endpoints": {
-            "/api/players/{position}": "Get players by position (QB, RB, WR, TE, K, DEF)",
-        },
-        "status": "operational"
-    })
-
-# Validate position parameter
-VALID_POSITIONS = {'QB', 'RB', 'WR', 'TE', 'K', 'DEF'}
-
-def get_table_name(position):
-    if position == 'DEF':
-        return ['lb_stats', 'dl_stats', 'db_stats']
-    return f"{position.lower()}_stats"
+# Enable CORS for all routes with specific settings
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*",
+        "methods": ["GET"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 @app.route('/api/players/<position>', methods=['GET'])
-@rate_limit
 def get_players_by_position(position):
-    if position not in VALID_POSITIONS:
-        return jsonify({
-            "error": "Invalid position",
-            "message": f"Position must be one of: {', '.join(VALID_POSITIONS)}",
-            "status": 400
-        }), 400
+    if position not in {'QB', 'RB', 'WR', 'TE', 'K', 'DEF'}:
+        return jsonify([]), 400
 
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        if position == 'DEF':
-            # Combine defensive players
+        if position == 'QB':
             query = """
                 SELECT 
-                    playername,
-                    playerid,
+                    playername as name,
+                    'QB' as position,
                     team,
-                    COALESCE(tackles, 0) as tackles,
-                    COALESCE(tackles_ast, 0) as tackles_ast,
-                    COALESCE(sacks, 0) as sacks,
-                    COALESCE(tackles_tfl, 0) as tackles_tfl,
-                    COALESCE(interceptions, 0) as interceptions,
-                    COALESCE(forced_fumbles, 0) as forced_fumbles,
-                    COALESCE(fumble_recoveries, 0) as fumble_recoveries,
-                    COALESCE(passes_defended, 0) as passes_defended,
-                    COALESCE(qb_hits, 0) as qb_hits,
-                    COALESCE(totalpoints, 0) as totalpoints,
-                    rank
+                    passingyards as passing_yards,
+                    rushingyards as rushing_yards,
+                    passingtds + rushingtds as touchdowns,
+                    interceptions
+                FROM qb_stats
+                ORDER BY totalpoints DESC
+            """
+        elif position == 'RB':
+            query = """
+                SELECT 
+                    playername as name,
+                    'RB' as position,
+                    team,
+                    0 as passing_yards,
+                    rushingyards as rushing_yards,
+                    rushingtds + receivingtds as touchdowns,
+                    0 as interceptions
+                FROM rb_stats
+                ORDER BY totalpoints DESC
+            """
+        elif position in ['WR', 'TE']:
+            query = f"""
+                SELECT 
+                    playername as name,
+                    '{position}' as position,
+                    team,
+                    0 as passing_yards,
+                    0 as rushing_yards,
+                    receivingtds as touchdowns,
+                    0 as interceptions
+                FROM {position.lower()}_stats
+                ORDER BY totalpoints DESC
+            """
+        elif position == 'K':
+            query = """
+                SELECT 
+                    playername as name,
+                    'K' as position,
+                    team,
+                    0 as passing_yards,
+                    0 as rushing_yards,
+                    0 as touchdowns,
+                    0 as interceptions
+                FROM k_stats
+                ORDER BY totalpoints DESC
+            """
+        else:  # DEF
+            query = """
+                SELECT 
+                    playername as name,
+                    'DEF' as position,
+                    team,
+                    0 as passing_yards,
+                    0 as rushing_yards,
+                    0 as touchdowns,
+                    interceptions
                 FROM (
                     SELECT * FROM lb_stats
                     UNION ALL
@@ -98,109 +96,26 @@ def get_players_by_position(position):
                 ) as def_stats
                 ORDER BY totalpoints DESC
             """
-        elif position == 'QB':
-            query = """
-                SELECT 
-                    playername,
-                    playerid,
-                    team,
-                    COALESCE(passingyards, 0) as passingyards,
-                    COALESCE(passingtds, 0) as passingtds,
-                    COALESCE(interceptions, 0) as interceptions,
-                    COALESCE(rushingyards, 0) as rushingyards,
-                    COALESCE(rushingtds, 0) as rushingtds,
-                    COALESCE(totalpoints, 0) as totalpoints,
-                    rank
-                FROM qb_stats
-                ORDER BY totalpoints DESC
-            """
-        elif position in ['WR', 'TE']:
-            query = """
-                SELECT 
-                    playername,
-                    playerid,
-                    team,
-                    COALESCE(receptions, 0) as receptions,
-                    COALESCE(targets, 0) as targets,
-                    COALESCE(receivingyards, 0) as receivingyards,
-                    COALESCE(receivingtds, 0) as receivingtds,
-                    COALESCE(totalpoints, 0) as totalpoints,
-                    rank
-                FROM {}
-                ORDER BY totalpoints DESC
-            """.format(get_table_name(position))
-        elif position == 'RB':
-            query = """
-                SELECT 
-                    playername,
-                    playerid,
-                    team,
-                    COALESCE(rushingyards, 0) as rushingyards,
-                    COALESCE(rushingtds, 0) as rushingtds,
-                    COALESCE(receptions, 0) as receptions,
-                    COALESCE(receivingyards, 0) as receivingyards,
-                    COALESCE(receivingtds, 0) as receivingtds,
-                    COALESCE(totalpoints, 0) as totalpoints,
-                    rank
-                FROM rb_stats
-                ORDER BY totalpoints DESC
-            """
-        else:  # K
-            query = """
-                SELECT 
-                    playername,
-                    playerid,
-                    team,
-                    COALESCE(fieldgoals, 0) as fieldgoals,
-                    COALESCE(fieldgoalattempts, 0) as fieldgoalattempts,
-                    COALESCE(extrapoints, 0) as extrapoints,
-                    COALESCE(extrapointattempts, 0) as extrapointattempts,
-                    COALESCE(totalpoints, 0) as totalpoints,
-                    rank
-                FROM k_stats
-                ORDER BY totalpoints DESC
-            """
 
         cur.execute(query)
-        results = cur.fetchall()
-        
-        if not results:
-            return jsonify({
-                "error": "Not Found",
-                "message": f"No players found for position: {position}",
-                "status": 404
-            }), 404
-
-        # Get column names from cursor description
         columns = [desc[0] for desc in cur.description]
-        
-        # Convert results to list of dictionaries
+        results = cur.fetchall()
+
+        # Convert to list of dictionaries with proper types
         players = []
         for row in results:
-            player_dict = {}
+            player = {}
             for i, value in enumerate(row):
-                # Convert numeric strings to appropriate types
-                if isinstance(value, str) and value.isdigit():
-                    player_dict[columns[i]] = int(value)
-                elif isinstance(value, (int, float)):
-                    player_dict[columns[i]] = value
+                if columns[i] in ['passing_yards', 'rushing_yards', 'touchdowns', 'interceptions']:
+                    player[columns[i]] = int(value) if value is not None else 0
                 else:
-                    player_dict[columns[i]] = value
-            players.append(player_dict)
+                    player[columns[i]] = value
+            players.append(player)
 
-        return jsonify({
-            "success": True,
-            "data": players,
-            "count": len(players),
-            "position": position
-        }), 200
+        return jsonify(players), 200
 
     except Exception as e:
-        return jsonify({
-            "error": "Server Error",
-            "message": str(e),
-            "status": 500
-        }), 500
+        return jsonify([]), 500
     finally:
         if cur:
             cur.close()
