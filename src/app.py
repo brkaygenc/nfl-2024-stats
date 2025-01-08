@@ -121,6 +121,7 @@ def get_players_by_position(position):
                     '{position}' as position,
                     team,
                     COALESCE(tackles, 0) as tackles,
+                    COALESCE(tackles_ast, 0) as assisted_tackles,
                     COALESCE(sacks, 0) as sacks,
                     COALESCE(interceptions, 0) as interceptions,
                     COALESCE(forced_fumbles, 0) as forced_fumbles,
@@ -128,10 +129,6 @@ def get_players_by_position(position):
                     COALESCE(passes_defended, 0) as passes_defended,
                     COALESCE(tackles_tfl, 0) as tackles_for_loss,
                     COALESCE(qb_hits, 0) as qb_hits,
-                    COALESCE(safeties, 0) as safeties,
-                    COALESCE(blocked_kicks, 0) as blocked_kicks,
-                    COALESCE(special_teams_tackles, 0) as special_teams_tackles,
-                    COALESCE(defensive_touchdowns, 0) as defensive_touchdowns,
                     COALESCE(totalpoints, 0) as total_points
                 FROM {position.lower()}_stats
                 ORDER BY totalpoints DESC
