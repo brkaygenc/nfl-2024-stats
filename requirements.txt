@@ -5,4 +5,5 @@ Flask
 pandas
 plotly
 gunicorn
-SQLAlchemy 
+SQLAlchemy
+Flask-CORS 
