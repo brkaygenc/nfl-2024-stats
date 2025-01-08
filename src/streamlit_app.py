@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-from sqlalchemy import create_engine, text
-from database import get_db_connection
+from sqlalchemy import create_engine
+from sqlalchemy.sql import text
+from src.database import get_db_connection
 
 # Set page config - MUST BE FIRST STREAMLIT COMMAND
 st.set_page_config(
