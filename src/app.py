@@ -4,6 +4,7 @@ from database import get_db_connection
 import psycopg2
 from functools import wraps
 import time
+import os
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -36,6 +37,17 @@ def rate_limit(f):
         rate_limit_data[client_ip].append(current_time)
         return f(*args, **kwargs)
     return decorated_function
+
+# Root endpoint to verify API is working
+@app.route('/')
+def index():
+    return jsonify({
+        "message": "Welcome to NFL Stats API",
+        "endpoints": {
+            "/api/players/{position}": "Get players by position (QB, RB, WR, TE, K, DEF)",
+        },
+        "status": "operational"
+    })
 
 # Validate position parameter
 VALID_POSITIONS = {'QB', 'RB', 'WR', 'TE', 'K', 'DEF'}
@@ -196,4 +208,5 @@ def get_players_by_position(position):
             conn.close()
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port) 
