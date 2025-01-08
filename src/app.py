@@ -6,6 +6,7 @@ from functools import wraps
 import time
 import os
 import logging
+from decimal import Decimal
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +21,15 @@ CORS(app, resources={
         "allow_headers": ["Content-Type"]
     }
 })
+
+# Custom JSON encoder to handle Decimal types
+class CustomJSONEncoder(Flask.json_encoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
+
+app.json_encoder = CustomJSONEncoder
 
 @app.route('/api/health')
 def health_check():
@@ -144,9 +154,11 @@ def get_players_by_position(position):
         for row in results:
             player = {}
             for i, value in enumerate(row):
-                # Convert all numeric fields to integers, handling None values
-                if isinstance(value, (int, float)) or (isinstance(value, str) and value.isdigit()):
-                    player[columns[i]] = int(value) if value is not None else 0
+                # Convert numeric values to float/int
+                if isinstance(value, (int, float, Decimal)):
+                    player[columns[i]] = float(value) if isinstance(value, Decimal) else value
+                elif isinstance(value, str) and value.isdigit():
+                    player[columns[i]] = int(value)
                 else:
                     player[columns[i]] = value
             players.append(player)
