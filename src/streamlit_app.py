@@ -313,26 +313,28 @@ else:
                         UPDATE qb_stats q
                         SET rank = r.new_rank
                         FROM ranked_qbs r
-                        WHERE q.playerid = r.playerid;
+                        WHERE q.playerid = r.playerid
+                        RETURNING q.playername, q.totalpoints, q.rank;
                     """)
                     
-                    # Get updated rank for the player
-                    cur.execute("""
-                        SELECT rank FROM qb_stats WHERE playername = %s
-                    """, (player_name,))
-                    rank_result = cur.fetchone()
+                    # Get all updated ranks
+                    rank_results = cur.fetchall()
                     
-                    st.success(f"""
-                    ✅ Stats Updated Successfully!
-                    - Player: {result[0]}
-                    - New Points: {result[1]}
-                    - New Rank: {rank_result[0]}
+                    # Find our player's new rank
+                    player_result = next((r for r in rank_results if r[0] == player_name), None)
                     
-                    The points were automatically calculated by the trigger and rankings have been updated.
-                    """)
-                    conn.commit()
-                else:
-                    st.warning("Player not found. Please check the name.")
+                    if player_result:
+                        st.success(f"""
+                        ✅ Stats Updated Successfully!
+                        - Player: {player_result[0]}
+                        - New Points: {player_result[1]}
+                        - New Rank: {player_result[2]}
+                        
+                        The points were automatically calculated by the trigger and rankings have been updated.
+                        """)
+                        conn.commit()
+                    else:
+                        st.warning("Player not found after ranking update. Please check the name.")
                     
             except Exception as e:
                 st.error(f"Error updating stats: {str(e)}")
