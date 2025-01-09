@@ -284,6 +284,146 @@ def get_team_players(team_code):
         if conn:
             conn.close()
 
+@app.route('/api/search', methods=['GET'])
+def search_players():
+    try:
+        name = request.args.get('name', '').lower()
+        position = request.args.get('position', '').upper()
+        
+        if not name:
+            return jsonify({
+                'error': 'Missing parameter',
+                'message': 'Name parameter is required'
+            }), 400
+            
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Build query based on position
+        if position == 'QB':
+            query = """
+                SELECT 
+                    playername as name,
+                    playerid,
+                    'QB' as position,
+                    team,
+                    passingyards as passing_yards,
+                    passingtds as passing_touchdowns,
+                    interceptions,
+                    rushingyards as rushing_yards,
+                    rushingtds as rushing_touchdowns,
+                    totalpoints as total_points
+                FROM qb_stats
+                WHERE LOWER(playername) LIKE %s
+                ORDER BY totalpoints DESC
+            """
+        elif position == 'RB':
+            query = """
+                SELECT 
+                    playername as name,
+                    playerid,
+                    'RB' as position,
+                    team,
+                    rushingyards as rushing_yards,
+                    rushingtds as rushing_touchdowns,
+                    receptions,
+                    receivingyards as receiving_yards,
+                    receivingtds as receiving_touchdowns,
+                    totalpoints as total_points
+                FROM rb_stats
+                WHERE LOWER(playername) LIKE %s
+                ORDER BY totalpoints DESC
+            """
+        elif position in ['WR', 'TE']:
+            query = f"""
+                SELECT 
+                    playername as name,
+                    playerid,
+                    '{position}' as position,
+                    team,
+                    receivingyards as receiving_yards,
+                    receptions,
+                    targets,
+                    receivingtds as receiving_touchdowns,
+                    totalpoints as total_points
+                FROM {position.lower()}_stats
+                WHERE LOWER(playername) LIKE %s
+                ORDER BY totalpoints DESC
+            """
+        elif position == 'K':
+            query = """
+                SELECT 
+                    playername as name,
+                    playerid,
+                    'K' as position,
+                    team,
+                    fieldgoals as field_goals,
+                    fieldgoalattempts as field_goals_attempted,
+                    extrapoints as extra_points,
+                    extrapointattempts as extra_points_attempted,
+                    totalpoints as total_points
+                FROM k_stats
+                WHERE LOWER(playername) LIKE %s
+                ORDER BY totalpoints DESC
+            """
+        elif position in ['LB', 'DL', 'DB']:
+            query = f"""
+                SELECT 
+                    playername as name,
+                    playerid,
+                    '{position}' as position,
+                    team,
+                    tackles,
+                    sacks,
+                    interceptions,
+                    passes_defended,
+                    forced_fumbles,
+                    tackles_tfl as tackles_for_loss,
+                    totalpoints as total_points
+                FROM {position.lower()}_stats
+                WHERE LOWER(playername) LIKE %s
+                ORDER BY totalpoints DESC
+            """
+        else:
+            return jsonify({
+                'error': 'Invalid position',
+                'message': f"Position must be one of: QB, RB, WR, TE, K, LB, DL, DB",
+                'provided': position
+            }), 400
+
+        # Execute query with wildcard search
+        search_pattern = f"%{name}%"
+        cur.execute(query, (search_pattern,))
+        columns = [desc[0] for desc in cur.description]
+        results = cur.fetchall()
+        
+        # Convert to list of dictionaries with proper types
+        players = []
+        for row in results:
+            player = {}
+            for i, value in enumerate(row):
+                if isinstance(value, (int, float, Decimal)):
+                    player[columns[i]] = float(value) if isinstance(value, Decimal) else value
+                elif isinstance(value, str) and value.isdigit():
+                    player[columns[i]] = int(value)
+                else:
+                    player[columns[i]] = value
+            players.append(player)
+        
+        return jsonify(players), 200
+        
+    except Exception as e:
+        logger.error(f"Error searching players: {str(e)}")
+        return jsonify({
+            'error': 'Database error',
+            'message': str(e)
+        }), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port) 
