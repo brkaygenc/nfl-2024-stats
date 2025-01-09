@@ -282,29 +282,53 @@ else:
         """)
 
         player_name = st.text_input("Enter QB Name (e.g., Patrick Mahomes)")
-        passing_yards = st.number_input("Passing Yards", min_value=0, value=300)
-        passing_tds = st.number_input("Passing TDs", min_value=0, value=3)
-        interceptions = st.number_input("Interceptions", min_value=0, value=0)
+        passing_yards = st.number_input("Passing Yards", min_value=0, value=3000)
+        passing_tds = st.number_input("Passing TDs", min_value=0, value=25)
+        interceptions = st.number_input("Interceptions", min_value=0, value=10)
+        rushing_yards = st.number_input("Rushing Yards", min_value=0, value=0)
+        rushing_tds = st.number_input("Rushing TDs", min_value=0, value=0)
 
         if st.button("Update Stats & Calculate Points"):
             conn = get_db_connection()
             cur = conn.cursor()
             try:
+                # First update the player's stats
                 cur.execute("""
                     UPDATE qb_stats 
-                    SET passingyards = %s, passingtds = %s, interceptions = %s
+                    SET passingyards = %s, passingtds = %s, interceptions = %s,
+                        rushingyards = %s, rushingtds = %s
                     WHERE playername = %s
                     RETURNING playername, totalpoints;
-                """, (passing_yards, passing_tds, interceptions, player_name))
+                """, (passing_yards, passing_tds, interceptions, rushing_yards, rushing_tds, player_name))
                 
                 result = cur.fetchone()
                 if result:
+                    # Update rankings for all QBs
+                    cur.execute("""
+                        WITH ranked_qbs AS (
+                            SELECT playerid, 
+                                   ROW_NUMBER() OVER (ORDER BY totalpoints DESC) as new_rank
+                            FROM qb_stats
+                        )
+                        UPDATE qb_stats q
+                        SET rank = r.new_rank
+                        FROM ranked_qbs r
+                        WHERE q.playerid = r.playerid;
+                    """)
+                    
+                    # Get updated rank for the player
+                    cur.execute("""
+                        SELECT rank FROM qb_stats WHERE playername = %s
+                    """, (player_name,))
+                    rank_result = cur.fetchone()
+                    
                     st.success(f"""
                     ✅ Stats Updated Successfully!
                     - Player: {result[0]}
                     - New Points: {result[1]}
+                    - New Rank: {rank_result[0]}
                     
-                    The points were automatically calculated by the trigger.
+                    The points were automatically calculated by the trigger and rankings have been updated.
                     """)
                     conn.commit()
                 else:
