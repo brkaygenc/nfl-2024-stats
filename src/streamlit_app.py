@@ -314,6 +314,9 @@ else:
                     The points were automatically calculated by the trigger.
                     """)
                     conn.commit()
+                    
+                    # Refresh the data display
+                    st.experimental_rerun()
                 else:
                     st.warning("Player not found. Please check the name.")
                 
