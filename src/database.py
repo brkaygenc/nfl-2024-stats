@@ -29,8 +29,8 @@ def create_tables(conn):
     cur = conn.cursor()
     
     try:
-        # Drop existing tables in reverse order of dependencies
-        print("Dropping existing tables...")
+        # Drop existing tables and constraints in reverse order of dependencies
+        print("Dropping existing tables and constraints...")
         cur.execute("""
             DROP TABLE IF EXISTS qb_stats CASCADE;
             DROP TABLE IF EXISTS rb_stats CASCADE;
@@ -42,7 +42,28 @@ def create_tables(conn):
             DROP TABLE IF EXISTS k_stats CASCADE;
             DROP TABLE IF EXISTS teams CASCADE;
         """)
-        print("Existing tables dropped")
+        
+        # Drop any existing constraints that might cause issues
+        cur.execute("""
+            DO $$ 
+            BEGIN
+                -- Drop constraints if they exist
+                BEGIN
+                    ALTER TABLE IF EXISTS qb_stats DROP CONSTRAINT IF EXISTS unique_qb_rank;
+                    ALTER TABLE IF EXISTS rb_stats DROP CONSTRAINT IF EXISTS unique_rb_rank;
+                    ALTER TABLE IF EXISTS wr_stats DROP CONSTRAINT IF EXISTS unique_wr_rank;
+                    ALTER TABLE IF EXISTS te_stats DROP CONSTRAINT IF EXISTS unique_te_rank;
+                    ALTER TABLE IF EXISTS lb_stats DROP CONSTRAINT IF EXISTS unique_lb_rank;
+                    ALTER TABLE IF EXISTS dl_stats DROP CONSTRAINT IF EXISTS unique_dl_rank;
+                    ALTER TABLE IF EXISTS db_stats DROP CONSTRAINT IF EXISTS unique_db_rank;
+                    ALTER TABLE IF EXISTS k_stats DROP CONSTRAINT IF EXISTS unique_k_rank;
+                EXCEPTION 
+                    WHEN undefined_table THEN 
+                        NULL;
+                END;
+            END $$;
+        """)
+        print("Existing tables and constraints dropped")
 
         # Create teams table
         cur.execute("""
