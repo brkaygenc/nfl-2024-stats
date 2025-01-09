@@ -292,17 +292,26 @@ else:
             conn = get_db_connection()
             cur = conn.cursor()
             try:
-                # Simple update, let the trigger handle points calculation
+                # Calculate points first
+                passing_points = round(passing_yards * 0.04, 2)
+                td_points = round(passing_tds * 4, 2)
+                int_points = round(interceptions * -2, 2)
+                rush_points = round(rushing_yards * 0.1, 2)
+                rush_td_points = round(rushing_tds * 6, 2)
+                total_points = round(passing_points + td_points + int_points + rush_points + rush_td_points, 2)
+
+                # Update stats and points
                 cur.execute("""
                     UPDATE qb_stats 
                     SET passingyards = %s, 
                         passingtds = %s, 
                         interceptions = %s,
                         rushingyards = %s, 
-                        rushingtds = %s
+                        rushingtds = %s,
+                        totalpoints = %s
                     WHERE playername = %s
                     RETURNING playername, totalpoints;
-                """, (passing_yards, passing_tds, interceptions, rushing_yards, rushing_tds, player_name))
+                """, (passing_yards, passing_tds, interceptions, rushing_yards, rushing_tds, total_points, player_name))
                 
                 result = cur.fetchone()
                 if result:
@@ -311,12 +320,15 @@ else:
                     - Player: {result[0]}
                     - New Points: {result[1]}
                     
-                    The points were automatically calculated by the trigger.
+                    Points Breakdown:
+                    - Passing Yards ({passing_yards}): {passing_points}
+                    - Passing TDs ({passing_tds}): {td_points}
+                    - Interceptions ({interceptions}): {int_points}
+                    - Rushing Yards ({rushing_yards}): {rush_points}
+                    - Rushing TDs ({rushing_tds}): {rush_td_points}
+                    - Total Points: {total_points}
                     """)
                     conn.commit()
-                    
-                    # Refresh the data display
-                    st.experimental_rerun()
                 else:
                     st.warning("Player not found. Please check the name.")
                 
