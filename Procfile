@@ -1,1 +1,1 @@
-web: PYTHONPATH=. gunicorn src.app:app 
+web: sh config/setup.sh && streamlit run src/streamlit_app.py 
