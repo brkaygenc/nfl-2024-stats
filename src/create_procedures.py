@@ -73,14 +73,20 @@ def create_procedures_and_triggers():
         cur.execute("""
             CREATE OR REPLACE FUNCTION calculate_qb_points()
             RETURNS TRIGGER AS $$
+            DECLARE
+                passing_points NUMERIC;
+                td_points NUMERIC;
+                int_points NUMERIC;
+                rush_points NUMERIC;
+                rush_td_points NUMERIC;
             BEGIN
-                NEW.totalpoints = (
-                    COALESCE(NEW.passingyards, 0) * 0.04 +
-                    COALESCE(NEW.passingtds, 0) * 4 +
-                    COALESCE(NEW.interceptions, 0) * -2 +
-                    COALESCE(NEW.rushingyards, 0) * 0.1 +
-                    COALESCE(NEW.rushingtds, 0) * 6
-                );
+                passing_points := ROUND(COALESCE(NEW.passingyards::NUMERIC, 0) * 0.04, 2);
+                td_points := ROUND(COALESCE(NEW.passingtds::NUMERIC, 0) * 4, 2);
+                int_points := ROUND(COALESCE(NEW.interceptions::NUMERIC, 0) * -2, 2);
+                rush_points := ROUND(COALESCE(NEW.rushingyards::NUMERIC, 0) * 0.1, 2);
+                rush_td_points := ROUND(COALESCE(NEW.rushingtds::NUMERIC, 0) * 6, 2);
+                
+                NEW.totalpoints := ROUND(passing_points + td_points + int_points + rush_points + rush_td_points, 2);
                 RETURN NEW;
             END;
             $$ LANGUAGE plpgsql;
