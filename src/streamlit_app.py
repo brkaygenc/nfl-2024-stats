@@ -104,8 +104,7 @@ if view_mode == "Stats View":
                 COALESCE(interceptions, 0) as interceptions,
                 COALESCE(rushingyards, 0) as rushingyards,
                 COALESCE(rushingtds, 0) as rushingtds,
-                COALESCE(totalpoints, 0) as totalpoints,
-                rank
+                COALESCE(totalpoints, 0) as totalpoints
             FROM {table_name}
             ORDER BY totalpoints DESC
         """
