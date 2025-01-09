@@ -29,6 +29,21 @@ def create_tables(conn):
     cur = conn.cursor()
     
     try:
+        # Drop existing tables in reverse order of dependencies
+        print("Dropping existing tables...")
+        cur.execute("""
+            DROP TABLE IF EXISTS qb_stats CASCADE;
+            DROP TABLE IF EXISTS rb_stats CASCADE;
+            DROP TABLE IF EXISTS wr_stats CASCADE;
+            DROP TABLE IF EXISTS te_stats CASCADE;
+            DROP TABLE IF EXISTS lb_stats CASCADE;
+            DROP TABLE IF EXISTS dl_stats CASCADE;
+            DROP TABLE IF EXISTS db_stats CASCADE;
+            DROP TABLE IF EXISTS k_stats CASCADE;
+            DROP TABLE IF EXISTS teams CASCADE;
+        """)
+        print("Existing tables dropped")
+
         # Create teams table
         cur.execute("""
             CREATE TABLE IF NOT EXISTS teams (
