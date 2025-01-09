@@ -164,4 +164,118 @@ web: sh config/setup.sh && streamlit run src/streamlit_app.py
 - Configure Streamlit
 - Set environment variables
 - Install dependencies
-``` 
+```
+
+## 7. Database Procedures and Triggers
+
+### 7.1 Points Calculation Trigger
+```sql
+CREATE OR REPLACE FUNCTION calculate_qb_points()
+RETURNS TRIGGER AS $$
+DECLARE
+    passing_points NUMERIC;
+    td_points NUMERIC;
+    int_points NUMERIC;
+    rush_points NUMERIC;
+    rush_td_points NUMERIC;
+BEGIN
+    -- Calculate individual components
+    passing_points := ROUND(COALESCE(NEW.passingyards::NUMERIC, 0) * 0.04, 2);
+    td_points := ROUND(COALESCE(NEW.passingtds::NUMERIC, 0) * 4, 2);
+    int_points := ROUND(COALESCE(NEW.interceptions::NUMERIC, 0) * -2, 2);
+    rush_points := ROUND(COALESCE(NEW.rushingyards::NUMERIC, 0) * 0.1, 2);
+    rush_td_points := ROUND(COALESCE(NEW.rushingtds::NUMERIC, 0) * 6, 2);
+    
+    -- Set total points
+    NEW.totalpoints := ROUND(passing_points + td_points + int_points + rush_points + rush_td_points, 2);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 7.2 Team Stats Procedure
+```sql
+CREATE OR REPLACE FUNCTION get_team_player_stats(team_code_param VARCHAR)
+RETURNS TABLE (
+    playername VARCHAR,
+    pos VARCHAR,
+    team_name VARCHAR,
+    points NUMERIC
+) AS $$
+BEGIN
+    RETURN QUERY
+    WITH team_stats AS (
+        -- Get QB stats
+        SELECT 
+            q.playername::VARCHAR,
+            'QB'::VARCHAR as pos,
+            t.team_name::VARCHAR,
+            q.totalpoints::NUMERIC as points
+        FROM qb_stats q
+        JOIN teams t ON t.team_code = q.team
+        WHERE q.team = team_code_param
+        
+        UNION ALL
+        
+        -- Get RB stats
+        SELECT 
+            r.playername::VARCHAR,
+            'RB'::VARCHAR,
+            t.team_name::VARCHAR,
+            r.totalpoints::NUMERIC
+        FROM rb_stats r
+        JOIN teams t ON t.team_code = r.team
+        WHERE r.team = team_code_param
+        
+        -- Similar for WR, TE, K positions
+    )
+    SELECT * FROM team_stats ORDER BY points DESC;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 7.3 How Procedures Work in Streamlit
+
+1. **Trigger Activation**
+```python
+# When updating QB stats in Streamlit
+cur.execute("""
+    UPDATE qb_stats 
+    SET passingyards = %s, 
+        passingtds = %s, 
+        interceptions = %s,
+        rushingyards = %s, 
+        rushingtds = %s
+    WHERE playername = %s
+    RETURNING playername, totalpoints;
+""", (passing_yards, passing_tds, interceptions, rushing_yards, rushing_tds, player_name))
+```
+- The `calculate_qb_points` trigger runs automatically BEFORE the UPDATE
+- Calculates new total points
+- Updates the record with new stats and points
+
+2. **Team Stats Procedure Usage**
+```python
+# When viewing team stats in Streamlit
+cur.execute("""
+    SELECT * FROM get_team_player_stats(%s)
+""", (team_code,))
+```
+- Called directly as a function
+- Returns combined stats for all players on a team
+- Results are sorted by points
+
+3. **Procedure Benefits**
+- Encapsulates complex logic in database
+- Ensures consistent calculations
+- Improves performance by reducing data transfer
+- Maintains data integrity
+
+4. **Integration Flow**
+```
+User Input → Streamlit → Database Procedure → Result → Display
+```
+- User updates stats in Streamlit
+- Trigger automatically calculates points
+- Procedures handle complex queries
+- Results displayed in Streamlit interface 
