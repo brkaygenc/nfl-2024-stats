@@ -292,50 +292,47 @@ else:
             conn = get_db_connection()
             cur = conn.cursor()
             try:
-                # First update the player's stats
+                # Update stats and rank in a single transaction
                 cur.execute("""
-                    UPDATE qb_stats 
-                    SET passingyards = %s, passingtds = %s, interceptions = %s,
-                        rushingyards = %s, rushingtds = %s
-                    WHERE playername = %s
-                    RETURNING playername, totalpoints;
+                    WITH updated_stats AS (
+                        UPDATE qb_stats 
+                        SET passingyards = %s, 
+                            passingtds = %s, 
+                            interceptions = %s,
+                            rushingyards = %s, 
+                            rushingtds = %s
+                        WHERE playername = %s
+                        RETURNING playerid, playername, totalpoints
+                    ),
+                    ranked_qbs AS (
+                        SELECT q.playerid,
+                               q.playername,
+                               q.totalpoints,
+                               ROW_NUMBER() OVER (ORDER BY q.totalpoints DESC) as new_rank
+                        FROM qb_stats q
+                        WHERE q.playerid IN (SELECT playerid FROM updated_stats)
+                    )
+                    UPDATE qb_stats q
+                    SET rank = r.new_rank
+                    FROM ranked_qbs r
+                    WHERE q.playerid = r.playerid
+                    RETURNING q.playername, q.totalpoints, q.rank;
                 """, (passing_yards, passing_tds, interceptions, rushing_yards, rushing_tds, player_name))
                 
                 result = cur.fetchone()
                 if result:
-                    # Update rankings for all QBs
-                    cur.execute("""
-                        WITH ranked_qbs AS (
-                            SELECT playerid, 
-                                   ROW_NUMBER() OVER (ORDER BY totalpoints DESC) as new_rank
-                            FROM qb_stats
-                        )
-                        UPDATE qb_stats q
-                        SET rank = r.new_rank
-                        FROM ranked_qbs r
-                        WHERE q.playerid = r.playerid
-                        RETURNING q.playername, q.totalpoints, q.rank;
+                    st.success(f"""
+                    ✅ Stats Updated Successfully!
+                    - Player: {result[0]}
+                    - New Points: {result[1]}
+                    - New Rank: {result[2]}
+                    
+                    The points were automatically calculated by the trigger and rankings have been updated.
                     """)
-                    
-                    # Get all updated ranks
-                    rank_results = cur.fetchall()
-                    
-                    # Find our player's new rank
-                    player_result = next((r for r in rank_results if r[0] == player_name), None)
-                    
-                    if player_result:
-                        st.success(f"""
-                        ✅ Stats Updated Successfully!
-                        - Player: {player_result[0]}
-                        - New Points: {player_result[1]}
-                        - New Rank: {player_result[2]}
-                        
-                        The points were automatically calculated by the trigger and rankings have been updated.
-                        """)
-                        conn.commit()
-                    else:
-                        st.warning("Player not found after ranking update. Please check the name.")
-                    
+                    conn.commit()
+                else:
+                    st.warning("Player not found. Please check the name.")
+                
             except Exception as e:
                 st.error(f"Error updating stats: {str(e)}")
                 conn.rollback()
