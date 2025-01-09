@@ -292,31 +292,16 @@ else:
             conn = get_db_connection()
             cur = conn.cursor()
             try:
-                # Update stats and rank in a single transaction
+                # Simple update, let the trigger handle points calculation
                 cur.execute("""
-                    WITH updated_stats AS (
-                        UPDATE qb_stats 
-                        SET passingyards = %s, 
-                            passingtds = %s, 
-                            interceptions = %s,
-                            rushingyards = %s, 
-                            rushingtds = %s
-                        WHERE playername = %s
-                        RETURNING playerid, playername, totalpoints
-                    ),
-                    ranked_qbs AS (
-                        SELECT q.playerid,
-                               q.playername,
-                               q.totalpoints,
-                               ROW_NUMBER() OVER (ORDER BY q.totalpoints DESC) as new_rank
-                        FROM qb_stats q
-                        WHERE q.playerid IN (SELECT playerid FROM updated_stats)
-                    )
-                    UPDATE qb_stats q
-                    SET rank = r.new_rank
-                    FROM ranked_qbs r
-                    WHERE q.playerid = r.playerid
-                    RETURNING q.playername, q.totalpoints, q.rank;
+                    UPDATE qb_stats 
+                    SET passingyards = %s, 
+                        passingtds = %s, 
+                        interceptions = %s,
+                        rushingyards = %s, 
+                        rushingtds = %s
+                    WHERE playername = %s
+                    RETURNING playername, totalpoints;
                 """, (passing_yards, passing_tds, interceptions, rushing_yards, rushing_tds, player_name))
                 
                 result = cur.fetchone()
@@ -325,9 +310,8 @@ else:
                     ✅ Stats Updated Successfully!
                     - Player: {result[0]}
                     - New Points: {result[1]}
-                    - New Rank: {result[2]}
                     
-                    The points were automatically calculated by the trigger and rankings have been updated.
+                    The points were automatically calculated by the trigger.
                     """)
                     conn.commit()
                 else:
