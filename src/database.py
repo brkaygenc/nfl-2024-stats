@@ -5,28 +5,28 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.sql import text
 import logging
+import time
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
+# Load environment variables
 load_dotenv()
 
 def get_db_connection():
+    """Get database connection"""
     try:
         logger.info("Connecting to database...")
-        # Get database URL from environment variable, default to local database if not set
-        database_url = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
+        # Use the provided database URL
+        database_url = "postgres://u4frfq8rphkr89:pb906d5963e4ac1f17db49d71c8ff2cfddd55faa1f12a6f63aa9a1d1ac938b9a9@clhtb6lu92mj2.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d1imqo8lepvt22"
         
         # Replace postgres:// with postgresql:// for SQLAlchemy
         if database_url.startswith('postgres://'):
             database_url = database_url.replace('postgres://', 'postgresql://', 1)
         
-        # If using local database, don't require SSL
-        if 'localhost' in database_url:
-            logger.info("Using local database connection")
-            conn = psycopg2.connect(database_url)
-        else:
-            logger.info("Using remote database connection with SSL")
-            conn = psycopg2.connect(database_url, sslmode='require')
+        # Always use SSL for this database
+        logger.info("Using database connection with SSL")
+        conn = psycopg2.connect(database_url, sslmode='require')
         
         # Test the connection
         with conn.cursor() as cur:
@@ -36,8 +36,25 @@ def get_db_connection():
         
         return conn
     except Exception as e:
-        logger.error(f"Error connecting to database: {str(e)}")
-        raise Exception(f"Database connection failed: {str(e)}")
+        error_msg = f"Database connection failed: {str(e)}"
+        logger.error(error_msg)
+        raise Exception(error_msg)
+
+def wait_for_db(max_retries=5, delay=2):
+    """Wait for database to become available"""
+    retries = 0
+    while retries < max_retries:
+        try:
+            conn = get_db_connection()
+            conn.close()
+            logger.info("Database is available")
+            return True
+        except Exception as e:
+            logger.warning(f"Database not ready (attempt {retries + 1}/{max_retries}): {str(e)}")
+            retries += 1
+            if retries < max_retries:
+                time.sleep(delay)
+    return False
 
 def create_tables(conn):
     print("Creating tables...")

@@ -17,13 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": "*",
-        "methods": ["GET"],
-        "allow_headers": ["Content-Type"]
-    }
-})
+CORS(app)  # Enable CORS for all routes
 
 # Custom JSON encoder to handle Decimal types
 class CustomJSONEncoder(Flask.json_encoder):
@@ -46,15 +40,14 @@ def handle_error(error):
     
     response = {
         'error': str(error.__class__.__name__),
-        'details': str(error)
+        'message': str(error)
     }
     
     if status_code == 500:
-        # Log the full traceback for 500 errors
-        logger.error(traceback.format_exc())
+        # Don't expose internal error details in production
         response = {
             'error': 'Internal Server Error',
-            'details': 'An unexpected error occurred. Please try again later.'
+            'message': 'An unexpected error occurred. Please try again later.'
         }
     
     return jsonify(response), status_code
@@ -63,31 +56,30 @@ def handle_error(error):
 def not_found_error(error):
     return jsonify({
         'error': 'Not Found',
-        'details': 'The requested resource was not found'
+        'message': 'The requested resource was not found'
     }), 404
 
 @app.errorhandler(400)
 def bad_request_error(error):
     return jsonify({
         'error': 'Bad Request',
-        'details': str(error)
+        'message': str(error)
     }), 400
 
 # Database connection decorator
 def with_db_connection(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        conn = None
         try:
             conn = get_db_connection()
-            result = f(conn, *args, **kwargs)
-            conn.close()
-            return result
-        except psycopg2.Error as e:
-            logger.error(f"Database error: {str(e)}")
-            raise Exception(f"Database error: {str(e)}")
+            return f(conn, *args, **kwargs)
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
+            logger.error(f"Database error in {f.__name__}: {str(e)}")
             raise
+        finally:
+            if conn:
+                conn.close()
     return decorated_function
 
 @app.route('/api/health')
