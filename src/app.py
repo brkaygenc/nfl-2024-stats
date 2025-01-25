@@ -7,9 +7,13 @@ import time
 import os
 import logging
 from decimal import Decimal
+import traceback
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -30,14 +34,69 @@ class CustomJSONEncoder(Flask.json_encoder):
 
 app.json_encoder = CustomJSONEncoder
 
+# Error handling middleware
+@app.errorhandler(Exception)
+def handle_error(error):
+    logger.error(f"An error occurred: {str(error)}")
+    logger.error(traceback.format_exc())
+    
+    status_code = 500
+    if hasattr(error, 'code'):
+        status_code = error.code
+    
+    response = {
+        'error': str(error.__class__.__name__),
+        'details': str(error)
+    }
+    
+    if status_code == 500:
+        # Log the full traceback for 500 errors
+        logger.error(traceback.format_exc())
+        response = {
+            'error': 'Internal Server Error',
+            'details': 'An unexpected error occurred. Please try again later.'
+        }
+    
+    return jsonify(response), status_code
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({
+        'error': 'Not Found',
+        'details': 'The requested resource was not found'
+    }), 404
+
+@app.errorhandler(400)
+def bad_request_error(error):
+    return jsonify({
+        'error': 'Bad Request',
+        'details': str(error)
+    }), 400
+
+# Database connection decorator
+def with_db_connection(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            conn = get_db_connection()
+            result = f(conn, *args, **kwargs)
+            conn.close()
+            return result
+        except psycopg2.Error as e:
+            logger.error(f"Database error: {str(e)}")
+            raise Exception(f"Database error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            raise
+    return decorated_function
+
 @app.route('/api/health')
-def health_check():
+@with_db_connection
+def health_check(conn):
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('SELECT 1')
         cur.close()
-        conn.close()
         return jsonify({
             'status': 'healthy',
             'database': 'connected',
@@ -48,17 +107,11 @@ def health_check():
         })
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
-        return jsonify({
-            'status': 'unhealthy',
-            'error': str(e),
-            'environment': {
-                'DATABASE_URL': bool(os.getenv('DATABASE_URL')),
-                'PORT': os.getenv('PORT', 5000)
-            }
-        }), 500
+        raise
 
 @app.route('/api/players/<position>', methods=['GET'])
-def get_players_by_position(position):
+@with_db_connection
+def get_players_by_position(conn, position):
     valid_positions = {'QB', 'RB', 'WR', 'TE', 'K', 'LB', 'DL', 'DB'}
     if position not in valid_positions:
         return jsonify({
@@ -68,7 +121,6 @@ def get_players_by_position(position):
         }), 400
 
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
 
         if position == 'QB':
@@ -175,20 +227,12 @@ def get_players_by_position(position):
 
     except Exception as e:
         logger.error(f"Error fetching {position} players: {str(e)}")
-        return jsonify({
-            'error': 'Database error',
-            'message': str(e)
-        }), 500
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        raise
 
 @app.route('/api/teams', methods=['GET'])
-def get_teams():
+@with_db_connection
+def get_teams(conn):
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
         
         query = """
@@ -212,20 +256,12 @@ def get_teams():
         
     except Exception as e:
         logger.error(f"Error fetching teams: {str(e)}")
-        return jsonify({
-            'error': 'Database error',
-            'message': str(e)
-        }), 500
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        raise
 
 @app.route('/api/team/<team_code>/players', methods=['GET'])
-def get_team_players(team_code):
+@with_db_connection
+def get_team_players(conn, team_code):
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
         
         # Get all players from all position tables for the given team
@@ -274,18 +310,11 @@ def get_team_players(team_code):
         
     except Exception as e:
         logger.error(f"Error fetching players for team {team_code}: {str(e)}")
-        return jsonify({
-            'error': 'Database error',
-            'message': str(e)
-        }), 500
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        raise
 
 @app.route('/api/search', methods=['GET'])
-def search_players():
+@with_db_connection
+def search_players(conn):
     try:
         name = request.args.get('name', '').strip().lower()
         position = request.args.get('position', '').strip().upper()
@@ -304,7 +333,6 @@ def search_players():
                 'provided': position
             }), 400
             
-        conn = get_db_connection()
         cur = conn.cursor()
         
         # If no position specified, search across all positions
@@ -513,16 +541,8 @@ def search_players():
         
     except Exception as e:
         logger.error(f"Error searching players: {str(e)}")
-        return jsonify({
-            'error': 'Database error',
-            'message': str(e)
-        }), 500
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        raise
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port) 
+    app.run(host='0.0.0.0', port=port)

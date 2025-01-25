@@ -4,25 +4,40 @@ import psycopg2
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.sql import text
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 def get_db_connection():
     try:
-        print("Connecting to database...")
+        logger.info("Connecting to database...")
         # Get database URL from environment variable, default to local database if not set
         database_url = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
         
+        # Replace postgres:// with postgresql:// for SQLAlchemy
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        
         # If using local database, don't require SSL
         if 'localhost' in database_url:
+            logger.info("Using local database connection")
             conn = psycopg2.connect(database_url)
         else:
+            logger.info("Using remote database connection with SSL")
             conn = psycopg2.connect(database_url, sslmode='require')
+        
+        # Test the connection
+        with conn.cursor() as cur:
+            cur.execute('SELECT 1')
+            cur.fetchone()
+            logger.info("Database connection successful")
         
         return conn
     except Exception as e:
-        print(f"Error connecting to database: {e}")
-        raise e
+        logger.error(f"Error connecting to database: {str(e)}")
+        raise Exception(f"Database connection failed: {str(e)}")
 
 def create_tables(conn):
     print("Creating tables...")
