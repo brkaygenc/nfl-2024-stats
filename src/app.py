@@ -287,113 +287,214 @@ def get_team_players(team_code):
 @app.route('/api/search', methods=['GET'])
 def search_players():
     try:
-        name = request.args.get('name', '').lower()
-        position = request.args.get('position', '').upper()
+        name = request.args.get('name', '').strip().lower()
+        position = request.args.get('position', '').strip().upper()
         
         if not name:
             return jsonify({
                 'error': 'Missing parameter',
                 'message': 'Name parameter is required'
             }), 400
+
+        valid_positions = {'QB', 'RB', 'WR', 'TE', 'K', 'LB', 'DL', 'DB'}
+        if position and position not in valid_positions:
+            return jsonify({
+                'error': 'Invalid position',
+                'message': f"Position must be one of: {', '.join(sorted(valid_positions))}",
+                'provided': position
+            }), 400
             
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Build query based on position
-        if position == 'QB':
+        # If no position specified, search across all positions
+        if not position:
             query = """
-                SELECT 
-                    playername as name,
-                    playerid,
-                    'QB' as position,
-                    team,
-                    passingyards as passing_yards,
-                    passingtds as passing_touchdowns,
-                    interceptions,
-                    rushingyards as rushing_yards,
-                    rushingtds as rushing_touchdowns,
-                    totalpoints as total_points
-                FROM qb_stats
-                WHERE LOWER(playername) LIKE %s
-                ORDER BY totalpoints DESC
+                WITH all_players AS (
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        'QB' as position,
+                        team,
+                        passingyards as passing_yards,
+                        passingtds as passing_touchdowns,
+                        interceptions,
+                        rushingyards as rushing_yards,
+                        rushingtds as rushing_touchdowns,
+                        totalpoints as total_points
+                    FROM qb_stats
+                    WHERE LOWER(playername) LIKE %s
+                    UNION ALL
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        'RB' as position,
+                        team,
+                        rushingyards as rushing_yards,
+                        rushingtds as rushing_touchdowns,
+                        receptions,
+                        receivingyards as receiving_yards,
+                        receivingtds as receiving_touchdowns,
+                        totalpoints as total_points
+                    FROM rb_stats
+                    WHERE LOWER(playername) LIKE %s
+                    UNION ALL
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        'WR' as position,
+                        team,
+                        receivingyards as receiving_yards,
+                        receptions,
+                        targets,
+                        receivingtds as receiving_touchdowns,
+                        NULL as other_stats,
+                        totalpoints as total_points
+                    FROM wr_stats
+                    WHERE LOWER(playername) LIKE %s
+                    UNION ALL
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        'TE' as position,
+                        team,
+                        receivingyards as receiving_yards,
+                        receptions,
+                        targets,
+                        receivingtds as receiving_touchdowns,
+                        NULL as other_stats,
+                        totalpoints as total_points
+                    FROM te_stats
+                    WHERE LOWER(playername) LIKE %s
+                    UNION ALL
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        'K' as position,
+                        team,
+                        fieldgoals as field_goals,
+                        fieldgoalattempts as field_goals_attempted,
+                        extrapoints as extra_points,
+                        extrapointattempts as extra_points_attempted,
+                        NULL as other_stats,
+                        totalpoints as total_points
+                    FROM k_stats
+                    WHERE LOWER(playername) LIKE %s
+                    UNION ALL
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        pos.position,
+                        team,
+                        tackles,
+                        sacks,
+                        interceptions,
+                        passes_defended,
+                        forced_fumbles,
+                        totalpoints as total_points
+                    FROM (
+                        SELECT 'LB' as position, * FROM lb_stats
+                        UNION ALL
+                        SELECT 'DL' as position, * FROM dl_stats
+                        UNION ALL
+                        SELECT 'DB' as position, * FROM db_stats
+                    ) pos
+                    WHERE LOWER(playername) LIKE %s
+                )
+                SELECT * FROM all_players
+                ORDER BY total_points DESC
             """
-        elif position == 'RB':
-            query = """
-                SELECT 
-                    playername as name,
-                    playerid,
-                    'RB' as position,
-                    team,
-                    rushingyards as rushing_yards,
-                    rushingtds as rushing_touchdowns,
-                    receptions,
-                    receivingyards as receiving_yards,
-                    receivingtds as receiving_touchdowns,
-                    totalpoints as total_points
-                FROM rb_stats
-                WHERE LOWER(playername) LIKE %s
-                ORDER BY totalpoints DESC
-            """
-        elif position in ['WR', 'TE']:
-            query = f"""
-                SELECT 
-                    playername as name,
-                    playerid,
-                    '{position}' as position,
-                    team,
-                    receivingyards as receiving_yards,
-                    receptions,
-                    targets,
-                    receivingtds as receiving_touchdowns,
-                    totalpoints as total_points
-                FROM {position.lower()}_stats
-                WHERE LOWER(playername) LIKE %s
-                ORDER BY totalpoints DESC
-            """
-        elif position == 'K':
-            query = """
-                SELECT 
-                    playername as name,
-                    playerid,
-                    'K' as position,
-                    team,
-                    fieldgoals as field_goals,
-                    fieldgoalattempts as field_goals_attempted,
-                    extrapoints as extra_points,
-                    extrapointattempts as extra_points_attempted,
-                    totalpoints as total_points
-                FROM k_stats
-                WHERE LOWER(playername) LIKE %s
-                ORDER BY totalpoints DESC
-            """
-        elif position in ['LB', 'DL', 'DB']:
-            query = f"""
-                SELECT 
-                    playername as name,
-                    playerid,
-                    '{position}' as position,
-                    team,
-                    tackles,
-                    sacks,
-                    interceptions,
-                    passes_defended,
-                    forced_fumbles,
-                    tackles_tfl as tackles_for_loss,
-                    totalpoints as total_points
-                FROM {position.lower()}_stats
-                WHERE LOWER(playername) LIKE %s
-                ORDER BY totalpoints DESC
-            """
+            search_pattern = f"%{name}%"
+            cur.execute(query, [search_pattern] * 6)
         else:
-            return jsonify({
-                'error': 'Invalid position',
-                'message': f"Position must be one of: QB, RB, WR, TE, K, LB, DL, DB",
-                'provided': position
-            }), 400
+            # Position-specific queries (existing implementation)
+            if position == 'QB':
+                query = """
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        'QB' as position,
+                        team,
+                        passingyards as passing_yards,
+                        passingtds as passing_touchdowns,
+                        interceptions,
+                        rushingyards as rushing_yards,
+                        rushingtds as rushing_touchdowns,
+                        totalpoints as total_points
+                    FROM qb_stats
+                    WHERE LOWER(playername) LIKE %s
+                    ORDER BY totalpoints DESC
+                """
+            elif position == 'RB':
+                query = """
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        'RB' as position,
+                        team,
+                        rushingyards as rushing_yards,
+                        rushingtds as rushing_touchdowns,
+                        receptions,
+                        receivingyards as receiving_yards,
+                        receivingtds as receiving_touchdowns,
+                        totalpoints as total_points
+                    FROM rb_stats
+                    WHERE LOWER(playername) LIKE %s
+                    ORDER BY totalpoints DESC
+                """
+            elif position in ['WR', 'TE']:
+                query = f"""
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        '{position}' as position,
+                        team,
+                        receivingyards as receiving_yards,
+                        receptions,
+                        targets,
+                        receivingtds as receiving_touchdowns,
+                        totalpoints as total_points
+                    FROM {position.lower()}_stats
+                    WHERE LOWER(playername) LIKE %s
+                    ORDER BY totalpoints DESC
+                """
+            elif position == 'K':
+                query = """
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        'K' as position,
+                        team,
+                        fieldgoals as field_goals,
+                        fieldgoalattempts as field_goals_attempted,
+                        extrapoints as extra_points,
+                        extrapointattempts as extra_points_attempted,
+                        totalpoints as total_points
+                    FROM k_stats
+                    WHERE LOWER(playername) LIKE %s
+                    ORDER BY totalpoints DESC
+                """
+            elif position in ['LB', 'DL', 'DB']:
+                query = f"""
+                    SELECT 
+                        playername as name,
+                        playerid,
+                        '{position}' as position,
+                        team,
+                        tackles,
+                        sacks,
+                        interceptions,
+                        passes_defended,
+                        forced_fumbles,
+                        tackles_tfl as tackles_for_loss,
+                        totalpoints as total_points
+                    FROM {position.lower()}_stats
+                    WHERE LOWER(playername) LIKE %s
+                    ORDER BY totalpoints DESC
+                """
+            search_pattern = f"%{name}%"
+            cur.execute(query, (search_pattern,))
 
-        # Execute query with wildcard search
-        search_pattern = f"%{name}%"
-        cur.execute(query, (search_pattern,))
         columns = [desc[0] for desc in cur.description]
         results = cur.fetchall()
         
@@ -404,12 +505,10 @@ def search_players():
             for i, value in enumerate(row):
                 if isinstance(value, (int, float, Decimal)):
                     player[columns[i]] = float(value) if isinstance(value, Decimal) else value
-                elif isinstance(value, str) and value.isdigit():
-                    player[columns[i]] = int(value)
                 else:
                     player[columns[i]] = value
             players.append(player)
-        
+            
         return jsonify(players), 200
         
     except Exception as e:
