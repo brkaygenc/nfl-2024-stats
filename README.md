@@ -1,146 +1,132 @@
 # NFL Stats 2024
 
-A comprehensive NFL statistics database and visualization project that provides player statistics across different positions with both API and web interface access.
+A comprehensive NFL statistics database and visualization project that provides real-time player statistics across different positions with both REST API and interactive web interface access. Built with Flask, Streamlit, and PostgreSQL.
 
-## Live Demo
+## 🌟 Live Demo
 
 - Web Interface: [https://nfl-website-db-8d1f1be10618.herokuapp.com/](https://nfl-website-db-8d1f1be10618.herokuapp.com/)
 - API Endpoint: [https://nfl-website-db-8d1f1be10618.herokuapp.com/api](https://nfl-website-db-8d1f1be10618.herokuapp.com/api)
 
-## Project Structure
+## 🎯 Key Features
 
-```
-nfl-stats-2024/
-├── src/                    # Source code
-│   ├── app.py             # Flask API application
-│   ├── database.py        # Database operations and models
-│   ├── streamlit_app.py   # Streamlit web interface
-│   └── create_procedures.py# Database stored procedures
-│
-├── data/                   # Data files
-│   ├── teams.json         # Team information
-│   ├── QB_season.json     # Quarterback statistics
-│   ├── RB_season.json     # Running back statistics
-│   ├── WR_season.json     # Wide receiver statistics
-│   ├── TE_season.json     # Tight end statistics
-│   ├── K_season.json      # Kicker statistics
-│   ├── DB_season.json     # Defensive back statistics
-│   ├── DL_season.json     # Defensive line statistics
-│   └── LB_season.json     # Linebacker statistics
-│
-├── config/                 # Configuration files
-│   ├── .env               # Environment variables
-│   └── setup.sh           # Setup script for Heroku
-│
-├── scripts/               # Utility scripts
-│   └── check_db.py       # Database connection checker
-│
-├── requirements.txt       # Python dependencies
-├── runtime.txt           # Python runtime specification
-├── Procfile             # Heroku process file
-├── Procfile.streamlit   # Streamlit process file
-└── README.md            # Project documentation
-```
+- **Comprehensive NFL Database**: Complete player statistics for the 2024 season
+- **Interactive Web Interface**:
+  - Position-based player statistics with advanced filtering
+  - Team roster views with detailed player information
+  - Custom SQL query interface for advanced data analysis
+  - Interactive data visualizations and analytics
+- **RESTful API**: Programmatic access to all NFL statistics
+- **Multi-Position Support**: Complete stats for QB, RB, WR, TE, K, DB, DL, LB
+- **Advanced Database Features**: Optimized PostgreSQL schema with stored procedures
+- **Real-time Updates**: Latest NFL statistics and player information
 
-## Features
+## 🖥️ Web Interface
 
-- Complete NFL player statistics database for the 2024 season
-- REST API for programmatic data access
-- Interactive web interface built with Streamlit featuring:
-  - Position-based player statistics
-  - Team roster views
-  - Custom SQL query interface
-  - Data visualization and analytics
-- Stored procedures for complex database operations
-- Support for multiple player positions (QB, RB, WR, TE, K, DB, DL, LB)
-- Comprehensive team statistics
+Our Streamlit-powered web interface offers three main features:
 
-## Web Interface
+1. **Stats Dashboard**
+   - Interactive filters for position groups (Offense, Defense, Special Teams)
+   - Detailed player statistics with sorting and filtering
+   - Performance rankings and comparisons
+   - Team-based analytics
 
-The Streamlit web interface offers two main modes:
-
-1. **Stats View**
-   - Filter players by position groups (Offense, Defense, Special Teams)
-   - View detailed statistics for each position
-   - See top players rankings
-   - Access summary statistics
-
-2. **SQL Query Mode**
+2. **SQL Query Laboratory**
    - Write and execute custom SQL queries
-   - View query results in tabular format
-   - Access example queries
-   - See available tables and their structure
+   - Interactive query results with export options
+   - Pre-built example queries for common analyses
+   - Complete database schema documentation
 
-## Local Development Setup
+3. **Team Analytics**
+   - Comprehensive team statistics
+   - Player performance within team context
+   - Team comparison tools
 
-1. Clone the repository:
+## 🚀 Quick Start Guide
+
+1. **Clone and Setup**
 ```bash
+# Clone the repository
 git clone https://github.com/brkaygenc/nfl-2024-stats.git
 cd nfl-2024-stats
-```
 
-2. Create a virtual environment:
-```bash
+# Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-3. Install dependencies:
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-4. Set up PostgreSQL database and configure environment variables:
+2. **Database Setup**
 ```bash
-# Create a .env file in the config directory with:
-DATABASE_URL=postgresql://username:password@localhost/nfl_stats
-```
+# Create .env file in config directory
+echo "DATABASE_URL=postgresql://username:password@localhost/nfl_stats" > config/.env
 
-5. Initialize the database:
-```bash
+# Initialize database and create procedures
 python src/database.py
-```
-
-6. Create stored procedures:
-```bash
 python src/create_procedures.py
 ```
 
-7. Run the applications:
+3. **Run Applications**
 ```bash
-# For Flask API (in one terminal)
+# Terminal 1: Start API server
 python src/app.py
 
-# For Streamlit interface (in another terminal)
+# Terminal 2: Launch Streamlit interface
 streamlit run src/streamlit_app.py
 ```
 
-## API Endpoints
+## 🔌 API Reference
 
-- `GET /api/teams` - List all teams
-- `GET /api/players/<position>` - Get players by position (QB, RB, WR, TE, K, DB, DL, LB)
-- `GET /api/players/team/<team>` - Get all players for a specific team
-- `GET /api/stats/<position>` - Get detailed statistics for a position
-- `GET /api/team/points/<team>` - Get total points for a team
+### Core Endpoints
 
-## Database Features
+| Endpoint | Method | Description | Example |
+|----------|--------|-------------|---------|
+| `/api/teams` | GET | List all NFL teams | `/api/teams` |
+| `/api/players/<position>` | GET | Get players by position | `/api/players/QB` |
+| `/api/players/team/<team>` | GET | Get team roster | `/api/players/team/SF` |
+| `/api/stats/<position>` | GET | Position statistics | `/api/stats/WR` |
 
-- Optimized PostgreSQL database schema
-- Stored procedures for complex queries:
-  - `get_team_player_stats(team_code)` - Get all players and their stats for a team
-  - `calculate_team_points(team_code)` - Calculate total points for a team
-  - `get_top_position_players(position, limit)` - Get top players for a position
-- Efficient data loading and updates
-- SSL-secured database connections
+### Query Parameters
 
-## Deployment
+- `limit`: Number of results (default: 25)
+- `sort`: Sort field (e.g., 'yards', 'touchdowns')
+- `order`: Sort order ('asc' or 'desc')
 
-The application is deployed on Heroku with:
-- PostgreSQL database for data storage
-- Automatic SSL database connections
-- Separate processes for API and Streamlit interface
-- Environment variable configuration
+## 🛠️ Tech Stack
 
-## Contributing
+- **Backend**: Flask, PostgreSQL, SQLAlchemy
+- **Frontend**: Streamlit, Pandas
+- **Deployment**: Heroku
+- **Data Processing**: Python, Pandas
+- **Security**: SSL-secured connections, Environment-based configuration
 
-Contributions are welcome! Please feel free to submit issues and pull requests. 
+## 📊 Database Architecture
+
+Our PostgreSQL database is optimized for NFL statistics with:
+
+- **Efficient Schema Design**: Normalized tables for players, teams, and statistics
+- **Stored Procedures**:
+  - `get_team_player_stats(team_code)`: Team roster with stats
+  - `calculate_team_points(team_code)`: Team scoring analytics
+  - `get_top_position_players(position, limit)`: Position rankings
+- **Performance Optimizations**: Indexed queries, materialized views
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how you can help:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📧 Contact
+
+- Project Link: [https://github.com/brkaygenc/nfl-2024-stats](https://github.com/brkaygenc/nfl-2024-stats)
+- Report Issues: [https://github.com/brkaygenc/nfl-2024-stats/issues](https://github.com/brkaygenc/nfl-2024-stats/issues)
