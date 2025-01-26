@@ -8,4 +8,4 @@ streamlit==1.28.0
 pandas==2.0.3
 numpy==1.24.3
 plotly==5.18.0
-SQLAlchemy==1.4.36Werkzeug==3.0.1
+SQLAlchemy==1.4.36
