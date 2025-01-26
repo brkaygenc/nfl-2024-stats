@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Blueprint
 from flask_cors import CORS
 from src.database import get_db_connection
 import psycopg2
@@ -16,8 +16,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Create a Blueprint for API routes
+api = Blueprint('api', __name__, url_prefix='/api')
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
 # Custom JSON encoder to handle Decimal types
 class CustomJSONEncoder(Flask.json_encoder):
@@ -44,27 +46,12 @@ def handle_error(error):
     }
     
     if status_code == 500:
-        # Don't expose internal error details in production
         response = {
             'error': 'Internal Server Error',
             'message': 'An unexpected error occurred. Please try again later.'
         }
     
     return jsonify(response), status_code
-
-@app.errorhandler(404)
-def not_found_error(error):
-    return jsonify({
-        'error': 'Not Found',
-        'message': 'The requested resource was not found'
-    }), 404
-
-@app.errorhandler(400)
-def bad_request_error(error):
-    return jsonify({
-        'error': 'Bad Request',
-        'message': str(error)
-    }), 400
 
 # Database connection decorator
 def with_db_connection(f):
@@ -82,7 +69,8 @@ def with_db_connection(f):
                 conn.close()
     return decorated_function
 
-@app.route('/api/health')
+# API Routes - all under /api prefix
+@api.route('/health')
 @with_db_connection
 def health_check(conn):
     try:
@@ -91,137 +79,72 @@ def health_check(conn):
         cur.close()
         return jsonify({
             'status': 'healthy',
-            'database': 'connected',
-            'environment': {
-                'DATABASE_URL': bool(os.getenv('DATABASE_URL')),
-                'PORT': os.getenv('PORT', 5000)
-            }
+            'database': 'connected'
         })
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
         raise
 
-@app.route('/api/players/<position>', methods=['GET'])
+@api.route('/players/<position>', methods=['GET'])
 @with_db_connection
 def get_players_by_position(conn, position):
     valid_positions = {'QB', 'RB', 'WR', 'TE', 'K', 'LB', 'DL', 'DB'}
     if position not in valid_positions:
         return jsonify({
             'error': 'Invalid position',
-            'message': f"Position must be one of: {', '.join(sorted(valid_positions))}",
-            'provided': position
+            'message': f'Position must be one of: {", ".join(valid_positions)}'
         }), 400
 
     try:
         cur = conn.cursor()
-
+        
         if position == 'QB':
             query = """
-                SELECT 
-                    playername as name,
-                    playerid,
-                    'QB' as position,
-                    team,
-                    passingyards as passing_yards,
-                    passingtds as passing_touchdowns,
-                    interceptions,
-                    rushingyards as rushing_yards,
-                    rushingtds as rushing_touchdowns,
-                    totalpoints as total_points
+                SELECT playerid, playername, team, passingyards, passingtds, 
+                       interceptions, rushingyards, rushingtds, totalpoints, rank
                 FROM qb_stats
-                ORDER BY totalpoints DESC
+                ORDER BY rank ASC
             """
         elif position == 'RB':
             query = """
-                SELECT 
-                    playername as name,
-                    playerid,
-                    'RB' as position,
-                    team,
-                    rushingyards as rushing_yards,
-                    rushingtds as rushing_touchdowns,
-                    receptions,
-                    receivingyards as receiving_yards,
-                    receivingtds as receiving_touchdowns,
-                    totalpoints as total_points
+                SELECT playerid, playername, team, rushingyards, rushingtds,
+                       receptions, receivingyards, receivingtds, totalpoints, rank
                 FROM rb_stats
-                ORDER BY totalpoints DESC
+                ORDER BY rank ASC
             """
-        elif position in ['WR', 'TE']:
+        elif position in ('WR', 'TE'):
             query = f"""
-                SELECT 
-                    playername as name,
-                    playerid,
-                    '{position}' as position,
-                    team,
-                    receivingyards as receiving_yards,
-                    receptions,
-                    targets,
-                    receivingtds as receiving_touchdowns,
-                    totalpoints as total_points
+                SELECT playerid, playername, team, receptions, targets,
+                       receivingyards, receivingtds, totalpoints, rank
                 FROM {position.lower()}_stats
-                ORDER BY totalpoints DESC
+                ORDER BY rank ASC
             """
-        elif position == 'K':
+        elif position in ('LB', 'DL', 'DB'):
+            query = f"""
+                SELECT playerid, playername, team, tackles, sacks,
+                       tackles_for_loss, forced_fumbles, totalpoints, rank
+                FROM {position.lower()}_stats
+                ORDER BY rank ASC
+            """
+        else:  # K
             query = """
-                SELECT 
-                    playername as name,
-                    playerid,
-                    'K' as position,
-                    team,
-                    fieldgoals as field_goals,
-                    fieldgoalattempts as field_goals_attempted,
-                    extrapoints as extra_points,
-                    extrapointattempts as extra_points_attempted,
-                    totalpoints as total_points
+                SELECT playerid, playername, team, fieldgoals, fieldgoal_attempts,
+                       extrapoints, extrapoint_attempts, totalpoints, rank
                 FROM k_stats
-                ORDER BY totalpoints DESC
+                ORDER BY rank ASC
             """
-        elif position in ['LB', 'DL', 'DB']:
-            query = f"""
-                SELECT 
-                    playername as name,
-                    playerid,
-                    '{position}' as position,
-                    team,
-                    tackles,
-                    sacks,
-                    interceptions,
-                    passes_defended,
-                    forced_fumbles,
-                    tackles_tfl as tackles_for_loss,
-                    totalpoints as total_points
-                FROM {position.lower()}_stats
-                ORDER BY totalpoints DESC
-            """
-
-        logger.info(f"Executing query for position: {position}")
+        
         cur.execute(query)
         columns = [desc[0] for desc in cur.description]
-        results = cur.fetchall()
-
-        # Convert to list of dictionaries with proper types
-        players = []
-        for row in results:
-            player = {}
-            for i, value in enumerate(row):
-                # Convert numeric values to float/int
-                if isinstance(value, (int, float, Decimal)):
-                    player[columns[i]] = float(value) if isinstance(value, Decimal) else value
-                elif isinstance(value, str) and value.isdigit():
-                    player[columns[i]] = int(value)
-                else:
-                    player[columns[i]] = value
-            players.append(player)
-
-        logger.info(f"Found {len(players)} players for position: {position}")
-        return jsonify(players), 200
+        players = [dict(zip(columns, row)) for row in cur.fetchall()]
+        
+        return jsonify(players)
 
     except Exception as e:
         logger.error(f"Error fetching {position} players: {str(e)}")
         raise
 
-@app.route('/api/teams', methods=['GET'])
+@api.route('/teams', methods=['GET'])
 @with_db_connection
 def get_teams(conn):
     try:
@@ -235,22 +158,15 @@ def get_teams(conn):
         
         cur.execute(query)
         columns = [desc[0] for desc in cur.description]
-        results = cur.fetchall()
+        teams = [dict(zip(columns, row)) for row in cur.fetchall()]
         
-        teams = []
-        for row in results:
-            team = {}
-            for i, value in enumerate(row):
-                team[columns[i]] = value
-            teams.append(team)
-            
-        return jsonify(teams), 200
+        return jsonify(teams)
         
     except Exception as e:
         logger.error(f"Error fetching teams: {str(e)}")
         raise
 
-@app.route('/api/team/<team_code>/players', methods=['GET'])
+@api.route('/teams/<team_code>/players', methods=['GET'])
 @with_db_connection
 def get_team_players(conn, team_code):
     try:
@@ -258,53 +174,49 @@ def get_team_players(conn, team_code):
         
         # Get all players from all position tables for the given team
         query = """
-            SELECT playername as name, 'QB' as position, totalpoints as total_points
-            FROM qb_stats WHERE team = %s
+            SELECT 'QB' as position, playerid, playername, team, 
+                   passingyards as yards, passingtds as touchdowns, 
+                   totalpoints, rank
+            FROM qb_stats 
+            WHERE team = %s
             UNION ALL
-            SELECT playername as name, 'RB' as position, totalpoints as total_points
-            FROM rb_stats WHERE team = %s
+            SELECT 'RB' as position, playerid, playername, team, 
+                   rushingyards as yards, rushingtds as touchdowns, 
+                   totalpoints, rank
+            FROM rb_stats 
+            WHERE team = %s
             UNION ALL
-            SELECT playername as name, 'WR' as position, totalpoints as total_points
-            FROM wr_stats WHERE team = %s
+            SELECT 'WR' as position, playerid, playername, team, 
+                   receivingyards as yards, receivingtds as touchdowns, 
+                   totalpoints, rank
+            FROM wr_stats 
+            WHERE team = %s
             UNION ALL
-            SELECT playername as name, 'TE' as position, totalpoints as total_points
-            FROM te_stats WHERE team = %s
-            UNION ALL
-            SELECT playername as name, 'K' as position, totalpoints as total_points
-            FROM k_stats WHERE team = %s
-            UNION ALL
-            SELECT playername as name, 'LB' as position, totalpoints as total_points
-            FROM lb_stats WHERE team = %s
-            UNION ALL
-            SELECT playername as name, 'DL' as position, totalpoints as total_points
-            FROM dl_stats WHERE team = %s
-            UNION ALL
-            SELECT playername as name, 'DB' as position, totalpoints as total_points
-            FROM db_stats WHERE team = %s
-            ORDER BY total_points DESC
+            SELECT 'TE' as position, playerid, playername, team, 
+                   receivingyards as yards, receivingtds as touchdowns, 
+                   totalpoints, rank
+            FROM te_stats 
+            WHERE team = %s
+            ORDER BY totalpoints DESC
         """
         
-        cur.execute(query, [team_code] * 8)  # Pass team_code 8 times for each UNION
+        cur.execute(query, (team_code, team_code, team_code, team_code))
         columns = [desc[0] for desc in cur.description]
-        results = cur.fetchall()
+        players = [dict(zip(columns, row)) for row in cur.fetchall()]
         
-        players = []
-        for row in results:
-            player = {}
-            for i, value in enumerate(row):
-                if isinstance(value, Decimal):
-                    player[columns[i]] = float(value)
-                else:
-                    player[columns[i]] = value
-            players.append(player)
-            
-        return jsonify(players), 200
+        if not players:
+            return jsonify({
+                'error': 'Not Found',
+                'message': f'No players found for team {team_code}'
+            }), 404
+        
+        return jsonify(players)
         
     except Exception as e:
         logger.error(f"Error fetching players for team {team_code}: {str(e)}")
         raise
 
-@app.route('/api/search', methods=['GET'])
+@api.route('/search', methods=['GET'])
 @with_db_connection
 def search_players(conn):
     try:
@@ -313,15 +225,15 @@ def search_players(conn):
         
         if not name:
             return jsonify({
-                'error': 'Missing parameter',
+                'error': 'Bad Request',
                 'message': 'Name parameter is required'
             }), 400
-
+            
         valid_positions = {'QB', 'RB', 'WR', 'TE', 'K', 'LB', 'DL', 'DB'}
         if position and position not in valid_positions:
             return jsonify({
-                'error': 'Invalid position',
-                'message': f"Position must be one of: {', '.join(sorted(valid_positions))}",
+                'error': 'Bad Request',
+                'message': f'Invalid position. Must be one of: {", ".join(valid_positions)}',
                 'provided': position
             }), 400
             
@@ -330,210 +242,84 @@ def search_players(conn):
         # If no position specified, search across all positions
         if not position:
             query = """
-                WITH all_players AS (
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        'QB' as position,
-                        team,
-                        passingyards as passing_yards,
-                        passingtds as passing_touchdowns,
-                        interceptions,
-                        rushingyards as rushing_yards,
-                        rushingtds as rushing_touchdowns,
-                        totalpoints as total_points
-                    FROM qb_stats
-                    WHERE LOWER(playername) LIKE %s
-                    UNION ALL
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        'RB' as position,
-                        team,
-                        rushingyards as rushing_yards,
-                        rushingtds as rushing_touchdowns,
-                        receptions,
-                        receivingyards as receiving_yards,
-                        receivingtds as receiving_touchdowns,
-                        totalpoints as total_points
-                    FROM rb_stats
-                    WHERE LOWER(playername) LIKE %s
-                    UNION ALL
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        'WR' as position,
-                        team,
-                        receivingyards as receiving_yards,
-                        receptions,
-                        targets,
-                        receivingtds as receiving_touchdowns,
-                        NULL as other_stats,
-                        totalpoints as total_points
-                    FROM wr_stats
-                    WHERE LOWER(playername) LIKE %s
-                    UNION ALL
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        'TE' as position,
-                        team,
-                        receivingyards as receiving_yards,
-                        receptions,
-                        targets,
-                        receivingtds as receiving_touchdowns,
-                        NULL as other_stats,
-                        totalpoints as total_points
-                    FROM te_stats
-                    WHERE LOWER(playername) LIKE %s
-                    UNION ALL
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        'K' as position,
-                        team,
-                        fieldgoals as field_goals,
-                        fieldgoalattempts as field_goals_attempted,
-                        extrapoints as extra_points,
-                        extrapointattempts as extra_points_attempted,
-                        NULL as other_stats,
-                        totalpoints as total_points
-                    FROM k_stats
-                    WHERE LOWER(playername) LIKE %s
-                    UNION ALL
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        pos.position,
-                        team,
-                        tackles,
-                        sacks,
-                        interceptions,
-                        passes_defended,
-                        forced_fumbles,
-                        totalpoints as total_points
-                    FROM (
-                        SELECT 'LB' as position, * FROM lb_stats
-                        UNION ALL
-                        SELECT 'DL' as position, * FROM dl_stats
-                        UNION ALL
-                        SELECT 'DB' as position, * FROM db_stats
-                    ) pos
-                    WHERE LOWER(playername) LIKE %s
-                )
-                SELECT * FROM all_players
-                ORDER BY total_points DESC
+                SELECT 'QB' as position, playerid, playername, team, totalpoints, rank
+                FROM qb_stats 
+                WHERE LOWER(playername) LIKE %s
+                UNION ALL
+                SELECT 'RB' as position, playerid, playername, team, totalpoints, rank
+                FROM rb_stats 
+                WHERE LOWER(playername) LIKE %s
+                UNION ALL
+                SELECT 'WR' as position, playerid, playername, team, totalpoints, rank
+                FROM wr_stats 
+                WHERE LOWER(playername) LIKE %s
+                UNION ALL
+                SELECT 'TE' as position, playerid, playername, team, totalpoints, rank
+                FROM te_stats 
+                WHERE LOWER(playername) LIKE %s
+                UNION ALL
+                SELECT 'K' as position, playerid, playername, team, totalpoints, rank
+                FROM k_stats 
+                WHERE LOWER(playername) LIKE %s
+                UNION ALL
+                SELECT 'LB' as position, playerid, playername, team, totalpoints, rank
+                FROM lb_stats 
+                WHERE LOWER(playername) LIKE %s
+                UNION ALL
+                SELECT 'DL' as position, playerid, playername, team, totalpoints, rank
+                FROM dl_stats 
+                WHERE LOWER(playername) LIKE %s
+                UNION ALL
+                SELECT 'DB' as position, playerid, playername, team, totalpoints, rank
+                FROM db_stats 
+                WHERE LOWER(playername) LIKE %s
+                ORDER BY totalpoints DESC
             """
-            search_pattern = f"%{name}%"
-            cur.execute(query, [search_pattern] * 6)
+            search_pattern = f'%{name}%'
+            cur.execute(query, (search_pattern,) * 8)
         else:
-            # Position-specific queries (existing implementation)
-            if position == 'QB':
-                query = """
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        'QB' as position,
-                        team,
-                        passingyards as passing_yards,
-                        passingtds as passing_touchdowns,
-                        interceptions,
-                        rushingyards as rushing_yards,
-                        rushingtds as rushing_touchdowns,
-                        totalpoints as total_points
-                    FROM qb_stats
-                    WHERE LOWER(playername) LIKE %s
-                    ORDER BY totalpoints DESC
-                """
-            elif position == 'RB':
-                query = """
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        'RB' as position,
-                        team,
-                        rushingyards as rushing_yards,
-                        rushingtds as rushing_touchdowns,
-                        receptions,
-                        receivingyards as receiving_yards,
-                        receivingtds as receiving_touchdowns,
-                        totalpoints as total_points
-                    FROM rb_stats
-                    WHERE LOWER(playername) LIKE %s
-                    ORDER BY totalpoints DESC
-                """
-            elif position in ['WR', 'TE']:
-                query = f"""
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        '{position}' as position,
-                        team,
-                        receivingyards as receiving_yards,
-                        receptions,
-                        targets,
-                        receivingtds as receiving_touchdowns,
-                        totalpoints as total_points
-                    FROM {position.lower()}_stats
-                    WHERE LOWER(playername) LIKE %s
-                    ORDER BY totalpoints DESC
-                """
-            elif position == 'K':
-                query = """
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        'K' as position,
-                        team,
-                        fieldgoals as field_goals,
-                        fieldgoalattempts as field_goals_attempted,
-                        extrapoints as extra_points,
-                        extrapointattempts as extra_points_attempted,
-                        totalpoints as total_points
-                    FROM k_stats
-                    WHERE LOWER(playername) LIKE %s
-                    ORDER BY totalpoints DESC
-                """
-            elif position in ['LB', 'DL', 'DB']:
-                query = f"""
-                    SELECT 
-                        playername as name,
-                        playerid,
-                        '{position}' as position,
-                        team,
-                        tackles,
-                        sacks,
-                        interceptions,
-                        passes_defended,
-                        forced_fumbles,
-                        tackles_tfl as tackles_for_loss,
-                        totalpoints as total_points
-                    FROM {position.lower()}_stats
-                    WHERE LOWER(playername) LIKE %s
-                    ORDER BY totalpoints DESC
-                """
-            search_pattern = f"%{name}%"
-            cur.execute(query, (search_pattern,))
-
-        columns = [desc[0] for desc in cur.description]
-        results = cur.fetchall()
+            # Search specific position
+            table = f"{position.lower()}_stats"
+            query = f"""
+                SELECT %s as position, playerid, playername, team, totalpoints, rank
+                FROM {table}
+                WHERE LOWER(playername) LIKE %s
+                ORDER BY totalpoints DESC
+            """
+            search_pattern = f'%{name}%'
+            cur.execute(query, (position, search_pattern))
         
-        # Convert to list of dictionaries with proper types
-        players = []
-        for row in results:
-            player = {}
-            for i, value in enumerate(row):
-                if isinstance(value, (int, float, Decimal)):
-                    player[columns[i]] = float(value) if isinstance(value, Decimal) else value
-                else:
-                    player[columns[i]] = value
-            players.append(player)
-            
-        return jsonify(players), 200
+        columns = [desc[0] for desc in cur.description]
+        players = [dict(zip(columns, row)) for row in cur.fetchall()]
+        
+        if not players:
+            return jsonify({
+                'error': 'Not Found',
+                'message': f'No players found matching "{name}"'
+                + (f' with position {position}' if position else '')
+            }), 404
+        
+        return jsonify(players)
         
     except Exception as e:
         logger.error(f"Error searching players: {str(e)}")
         raise
+
+# Register the API blueprint
+app.register_blueprint(api)
+
+# Root route to handle non-API requests
+@app.route('/')
+def root():
+    return jsonify({
+        'message': 'NFL Stats API',
+        'endpoints': {
+            'search': '/api/search?name={player_name}&position={optional_position}',
+            'players_by_position': '/api/players/{position}',
+            'teams': '/api/teams',
+            'team_players': '/api/teams/{team_code}/players'
+        }
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
