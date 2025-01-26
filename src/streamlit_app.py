@@ -16,6 +16,9 @@ st.set_page_config(
 # Database configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/nfl_stats')
 
+# API configuration
+API_URL = os.getenv('API_URL', 'https://nfl-stats-api-2024-b3f5cb494117.herokuapp.com/api')
+
 # Create a connection to the database using SQLAlchemy
 try:
     # Replace 'postgres://' with 'postgresql://' for SQLAlchemy
